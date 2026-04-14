@@ -213,7 +213,13 @@ class ImprovementEngine:
                 prefix += 1
             else:
                 break
-        return prefix / longer
+        suffix = 0
+        for i in range(1, min(shorter - prefix, longer - prefix) + 1):
+            if a_stripped[-i] == b_stripped[-i]:
+                suffix += 1
+            else:
+                break
+        return (prefix + suffix) / longer
 
     def _validate_variant(self, variant: str, current_best: str, original_prompt: str) -> bool:
         """Quick validation to reject obviously bad variants without scoring."""

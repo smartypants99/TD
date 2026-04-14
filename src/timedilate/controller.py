@@ -252,6 +252,12 @@ class DilationController:
         best_ever_score = current_score
         consecutive_errors = 0
         failed_directives: set[str] = set()
+        # Pre-seed with historically bad directives from meta-learning
+        if self.meta:
+            worst = self.meta.worst_directives(task_type)
+            if worst:
+                failed_directives.update(worst)
+                logger.info("Pre-seeded %d historically bad directives", len(worst))
         # Carry initial feedback into the first cycle
         initial_score_feedback = ""
         if not resume:
@@ -430,7 +436,8 @@ class DilationController:
                 # Record directive outcome for meta-learning
                 if self.meta:
                     self.meta.record_directive(
-                        task_type, directive, current_score > previous_score
+                        task_type, directive, current_score > previous_score,
+                        score_delta=current_score - previous_score,
                     )
 
                 # Score ceiling detection — try fresh attempt to break through

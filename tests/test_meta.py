@@ -65,3 +65,38 @@ def test_task_type_isolation():
         assert ml2.best_directives("code")[0] == "Fix bugs"
         assert ml2.best_directives("prose")[0] == "Improve flow"
         assert "Improve flow" not in ml2.best_directives("code")
+
+
+def test_score_delta_tracking():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = str(Path(tmpdir) / "meta.json")
+        ml = MetaLearner(path)
+        ml.record_directive("code", "Fix bugs", True, score_delta=10)
+        ml.record_directive("code", "Fix bugs", True, score_delta=5)
+        ml.record_directive("code", "Optimize", False, score_delta=-2)
+        deltas = ml.avg_delta("code")
+        assert abs(deltas["Fix bugs"] - 7.5) < 0.01
+        assert abs(deltas["Optimize"] - (-2.0)) < 0.01
+
+
+def test_worst_directives():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = str(Path(tmpdir) / "meta.json")
+        ml = MetaLearner(path)
+        for _ in range(4):
+            ml.record_directive("code", "Bad approach", False, score_delta=-3)
+        for _ in range(3):
+            ml.record_directive("code", "Good approach", True, score_delta=5)
+        worst = ml.worst_directives("code")
+        assert "Bad approach" in worst
+        assert "Good approach" not in worst
+
+
+def test_worst_directives_needs_min_attempts():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = str(Path(tmpdir) / "meta.json")
+        ml = MetaLearner(path)
+        ml.record_directive("code", "Too few", False)
+        ml.record_directive("code", "Too few", False)
+        # Only 2 attempts, threshold is 3
+        assert ml.worst_directives("code") == []

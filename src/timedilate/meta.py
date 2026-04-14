@@ -25,15 +25,17 @@ class MetaLearner:
     def save(self) -> None:
         self.path.write_text(json.dumps(self.data, indent=2))
 
-    def record_directive(self, task_type: str, directive: str, improved: bool) -> None:
-        """Record whether a directive led to improvement."""
+    def record_directive(self, task_type: str, directive: str, improved: bool,
+                         score_delta: int = 0) -> None:
+        """Record whether a directive led to improvement and by how much."""
         stats = self.data["directive_stats"]
         key = f"{task_type}:{directive[:50]}"
         if key not in stats:
-            stats[key] = {"attempts": 0, "successes": 0}
+            stats[key] = {"attempts": 0, "successes": 0, "total_delta": 0}
         stats[key]["attempts"] += 1
         if improved:
             stats[key]["successes"] += 1
+        stats[key]["total_delta"] = stats[key].get("total_delta", 0) + score_delta
 
     def best_directives(self, task_type: str, top_n: int = 3) -> list[str]:
         """Return the top N directives by success rate for a task type.
@@ -49,6 +51,29 @@ class MetaLearner:
                 candidates.append((rate, directive))
         candidates.sort(reverse=True)
         return [d for _, d in candidates[:top_n]]
+
+    def worst_directives(self, task_type: str, top_n: int = 3) -> list[str]:
+        """Return directives that consistently fail (0% success with 3+ attempts)."""
+        stats = self.data["directive_stats"]
+        candidates = []
+        for key, val in stats.items():
+            if key.startswith(f"{task_type}:") and val["attempts"] >= 3:
+                rate = val["successes"] / val["attempts"]
+                if rate < 0.1:  # less than 10% success
+                    directive = key[len(task_type) + 1:]
+                    candidates.append((rate, directive))
+        candidates.sort()
+        return [d for _, d in candidates[:top_n]]
+
+    def avg_delta(self, task_type: str) -> dict[str, float]:
+        """Return {directive: avg_score_delta} for a task type."""
+        stats = self.data["directive_stats"]
+        result = {}
+        for key, val in stats.items():
+            if key.startswith(f"{task_type}:") and val["attempts"] > 0:
+                directive = key[len(task_type) + 1:]
+                result[directive] = val.get("total_delta", 0) / val["attempts"]
+        return result
 
     def effectiveness(self, task_type: str) -> dict[str, float]:
         """Return {directive_prefix: success_rate} for a task type."""

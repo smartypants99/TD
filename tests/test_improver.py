@@ -526,6 +526,10 @@ def test_similarity_ratio():
     assert improver._similarity_ratio("hello", "hello") == 1.0
     assert improver._similarity_ratio("hello", "world") < 0.5
     assert improver._similarity_ratio("hello world", "hello earth") > 0.4
+    # Suffix matching: "abc XYZ def" vs "abc 123 def" should be more similar
+    # than prefix-only would suggest
+    assert improver._similarity_ratio("abc XYZ def", "abc 123 def") > 0.5
+    assert improver._similarity_ratio("", "hello") == 0.0
 
 
 def test_validate_variant_rejects_near_duplicate():
