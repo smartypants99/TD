@@ -193,15 +193,16 @@ class DilationController:
                     metrics=metrics,
                 )
 
-            # Score the initial output (task-aware when applicable)
-            if task_type != "general":
-                score_prompt = self.scorer.build_task_aware_scoring_prompt(prompt, current_best, task_type)
-            else:
-                score_prompt = self.scorer.build_scoring_prompt(prompt, current_best)
+            # Score the initial output using feedback scoring to get actionable
+            # weaknesses for the first improvement cycle
+            fb_prompt = self.scorer.build_feedback_scoring_prompt(prompt, current_best)
             raw_score = self.engine.generate(
-                score_prompt, temperature=self.config.scoring_temperature
+                fb_prompt, temperature=self.config.scoring_temperature
             )
-            current_score = self.scorer.parse_score(raw_score)
+            current_score, initial_feedback = self.scorer.parse_feedback_score(raw_score)
+            initial_strengths, initial_weaknesses = self.scorer.parse_strengths_weaknesses(raw_score)
+            if initial_feedback:
+                logger.info("Initial assessment: score=%d, feedback=%s", current_score, initial_feedback[:100])
 
         self.improver.initial_output_length = len(current_best)
 
@@ -244,6 +245,13 @@ class DilationController:
         best_ever_score = current_score
         consecutive_errors = 0
         failed_directives: set[str] = set()
+        # Carry initial feedback into the first cycle
+        initial_score_feedback = ""
+        if not resume:
+            if initial_strengths:
+                initial_score_feedback += f"PRESERVE these strengths:\n{initial_strengths}\n"
+            if initial_weaknesses:
+                initial_score_feedback += f"FIX these weaknesses:\n{initial_weaknesses}"
 
         try:
             for cycle in range(start_cycle, refinement_cycles):
@@ -269,6 +277,9 @@ class DilationController:
                 # Every 5 cycles, do a detailed score to target weaknesses
                 # Every 3 cycles (not overlapping with 5), do feedback scoring for strengths/weaknesses
                 score_feedback_text = ""
+                # Use initial feedback on the first cycle
+                if cycle == start_cycle and initial_score_feedback:
+                    score_feedback_text = initial_score_feedback
                 if cycle > 0 and cycle % 3 == 0 and cycle % 5 != 0:
                     try:
                         fb_prompt = self.scorer.build_feedback_scoring_prompt(prompt, current_best)
@@ -464,6 +475,13 @@ class DilationController:
                 if metrics.should_early_terminate:
                     logger.info("Early termination: projected gains negligible at cycle %d (score %d)",
                                 cycle + 1, current_score)
+                    break
+
+                # Budget enforcement: stop if we've exceeded the time budget
+                total_elapsed = time.time() - start
+                if self.config.budget_seconds > 0 and total_elapsed > self.config.budget_seconds:
+                    logger.info("Budget exhausted (%.1fs / %.0fs) at cycle %d, stopping",
+                                total_elapsed, self.config.budget_seconds, cycle + 1)
                     break
 
                 if on_cycle:
