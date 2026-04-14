@@ -286,6 +286,15 @@ class RunMetrics:
         return overruled / len(self.cycles)
 
     @property
+    def winning_branch_distribution(self) -> dict[int, int]:
+        """Distribution of which branch index won (variant_index -> count).
+        -1 = no improvement, -2 = crossover. Useful for tuning temperature spread."""
+        dist: dict[int, int] = {}
+        for c in self.cycles:
+            dist[c.best_variant_index] = dist.get(c.best_variant_index, 0) + 1
+        return dist
+
+    @property
     def crossover_win_rate(self) -> float:
         """Fraction of improving cycles where crossover produced the winner."""
         improving = [c for c in self.cycles if c.score > c.previous_score]
@@ -372,6 +381,11 @@ class RunMetrics:
             recs.append("Generated directives outperform builtins — they'll be preferred automatically")
         if self.avg_cycle_time > 30:
             recs.append("Slow cycles — consider reducing branch_factor or using a faster model")
+        # Check if branch 0 dominates — temperature spread may be too wide
+        dist = self.winning_branch_distribution
+        improving_count = sum(v for k, v in dist.items() if k >= 0)
+        if improving_count >= 5 and dist.get(0, 0) / improving_count > 0.8:
+            recs.append("Branch 0 (lowest temp) wins most often — consider narrowing temperature spread")
         return recs
 
     def to_dict(self) -> dict:

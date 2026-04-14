@@ -636,8 +636,12 @@ class ImprovementEngine:
                             most_diverse[1], most_diverse[0], scored[0][1], scored[0][0])
                 best_score, best_index, best_variant = most_diverse
 
-        # Try crossover if top 2 are close (within 10 points) and we have 2+ variants
-        if len(scored) >= 2 and (scored[0][0] - scored[1][0]) <= 10:
+        # Try crossover if top 2 are close (within 10 points), both beat current,
+        # and the top score is worth combining (above 40 — don't crossover garbage)
+        if (len(scored) >= 2
+                and (scored[0][0] - scored[1][0]) <= 10
+                and scored[1][0] > current_score
+                and scored[0][0] >= 40):
             crossover = self._crossover(original_prompt, scored[0][2], scored[1][2],
                                          score_a=scored[0][0], score_b=scored[1][0],
                                          task_type=task_type)

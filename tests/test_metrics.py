@@ -490,6 +490,31 @@ def test_points_per_second():
     assert abs(m.points_per_second - 6.0) < 0.01
 
 
+def test_winning_branch_distribution():
+    m = _make_metrics_with_cycles([
+        {"score": 60, "previous_score": 50, "best_variant_index": 0},
+        {"score": 70, "previous_score": 60, "best_variant_index": 1},
+        {"score": 75, "previous_score": 70, "best_variant_index": 0},
+        {"score": 75, "previous_score": 75, "best_variant_index": -1},
+        {"score": 80, "previous_score": 75, "best_variant_index": -2},
+    ])
+    dist = m.winning_branch_distribution
+    assert dist[0] == 2
+    assert dist[1] == 1
+    assert dist[-1] == 1
+    assert dist[-2] == 1
+
+
+def test_recommendation_branch_0_dominance():
+    """Recommend narrowing temp spread when branch 0 always wins."""
+    m = _make_metrics_with_cycles([
+        {"score": 60+i, "previous_score": 50+i, "best_variant_index": 0}
+        for i in range(6)
+    ])
+    recs = m.recommendations
+    assert any("temperature" in r.lower() for r in recs)
+
+
 def test_points_per_second_in_to_dict():
     m = _make_metrics_with_cycles([
         {"score": 70, "previous_score": 50, "elapsed_seconds": 1.0},
