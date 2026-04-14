@@ -302,6 +302,40 @@ def test_score_feedback_in_improvement_prompt():
     assert best == "improved"
 
 
+def test_crossover_combines_variants():
+    """Crossover generates a combined output from two variants."""
+    engine = make_mock_engine(["combined solution"])
+    config = TimeDilateConfig(branch_factor=1)
+    improver = ImprovementEngine(engine, config)
+    result = improver._crossover("test task", "solution A", "solution B")
+    assert result == "combined solution"
+    call_args = engine.generate.call_args_list[0][0][0]
+    assert "Solution A" in call_args
+    assert "Solution B" in call_args
+
+
+def test_crossover_in_score_select():
+    """When top 2 variants are close, crossover is attempted."""
+    # v1=80, v2=75 (within 10), crossover="merged", cross_score=90
+    engine = make_mock_engine([
+        "v1", "v2",
+        "SCORE: 80", "SCORE: 75",  # CoT scores
+        "merged",                    # crossover
+        "SCORE: 90",                 # crossover score
+    ])
+    config = TimeDilateConfig(branch_factor=2)
+    improver = ImprovementEngine(engine, config)
+    best, score, idx = improver.run_cycle(
+        original_prompt="test",
+        current_best="original",
+        current_score=50,
+        directive="Improve.",
+    )
+    assert best == "merged"
+    assert score == 90
+    assert idx == -2  # crossover indicator
+
+
 def test_validate_variant_rejects_echo():
     """Variant that echoes the prompt is rejected."""
     config = TimeDilateConfig(branch_factor=1)

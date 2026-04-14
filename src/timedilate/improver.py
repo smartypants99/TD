@@ -253,18 +253,25 @@ class ImprovementEngine:
 
     def _score_select(self, original_prompt: str, variants: list[str]) -> tuple[str, int, int]:
         """Score each variant, return (best_variant, best_index, best_score).
-        Uses CoT scoring when there are multiple variants for better discrimination."""
-        best_variant = variants[0]
-        best_score = -1
-        best_index = 0
+        Uses CoT scoring when there are multiple variants for better discrimination.
+        Attempts crossover when top 2 variants have close scores."""
         use_cot = len(variants) > 1
-
+        scored = []
         for i, variant in enumerate(variants):
             score = self._score_variant(original_prompt, variant, use_cot=use_cot)
-            if score > best_score:
-                best_variant = variant
-                best_score = score
-                best_index = i
+            scored.append((score, i, variant))
+
+        scored.sort(reverse=True, key=lambda x: x[0])
+        best_score, best_index, best_variant = scored[0]
+
+        # Try crossover if top 2 are close (within 10 points) and we have 2+ variants
+        if len(scored) >= 2 and (scored[0][0] - scored[1][0]) <= 10:
+            crossover = self._crossover(original_prompt, scored[0][2], scored[1][2])
+            if crossover:
+                cross_score = self._score_variant(original_prompt, crossover, use_cot=use_cot)
+                if cross_score > best_score:
+                    logger.info("Crossover produced better variant (%d > %d)", cross_score, best_score)
+                    return crossover, -2, cross_score  # -2 indicates crossover origin
 
         return best_variant, best_index, best_score
 
@@ -289,6 +296,25 @@ class ImprovementEngine:
             indexed = next_round
 
         return indexed[0][1], indexed[0][0]
+
+    def _crossover(self, original_prompt: str, variant_a: str, variant_b: str) -> str | None:
+        """Combine the best parts of two variants into a new output."""
+        try:
+            prompt = (
+                f"Original task: {original_prompt}\n\n"
+                f"Two candidate solutions were generated. Combine the best aspects of each "
+                f"into a single superior solution.\n\n"
+                f"Solution A:\n{variant_a}\n\n"
+                f"Solution B:\n{variant_b}\n\n"
+                f"Output ONLY the combined, improved solution."
+            )
+            result = self.engine.generate(prompt)
+            if result and result.strip():
+                return result
+            return None
+        except Exception as e:
+            logger.warning("Crossover failed: %s", e)
+            return None
 
     def _compare_outputs(self, original_prompt: str, output_a: str, output_b: str) -> str:
         """A/B compare two outputs, returns 'A', 'B', or 'TIE'."""
