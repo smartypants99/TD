@@ -221,6 +221,42 @@ def test_tournament_with_odd_number():
     assert idx == 0
 
 
+def test_reflection_based_generation():
+    """With use_reflection=True and score>=60, branch 0 uses reflect-then-act."""
+    engine = make_mock_engine([
+        "Should fix error handling and add tests",  # reflection
+        "improved with reflection",                   # variant from reflection
+        "92",                                         # score
+    ])
+    config = TimeDilateConfig(branch_factor=1, use_reflection=True)
+    improver = ImprovementEngine(engine, config)
+    best, score, idx = improver.run_cycle(
+        original_prompt="test",
+        current_best="original",
+        current_score=70,  # >= 60, triggers reflection
+        directive="Improve.",
+    )
+    assert best == "improved with reflection"
+    assert score == 92
+    # Should have 3 calls: reflection, variant, score
+    assert engine.generate.call_count == 3
+
+
+def test_reflection_skipped_below_threshold():
+    """Reflection is skipped when score < 60 even if enabled."""
+    engine = make_mock_engine(["improved", "80"])
+    config = TimeDilateConfig(branch_factor=1, use_reflection=True)
+    improver = ImprovementEngine(engine, config)
+    best, score, idx = improver.run_cycle(
+        original_prompt="test",
+        current_best="original",
+        current_score=40,  # < 60, no reflection
+        directive="Improve.",
+    )
+    assert best == "improved"
+    assert engine.generate.call_count == 2  # just variant + score
+
+
 def test_fresh_attempt():
     """Fresh attempt generates from scratch, not from current best."""
     engine = make_mock_engine(["fresh solution", "85"])

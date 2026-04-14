@@ -15,3 +15,4 @@ class TimeDilateConfig:
     checkpoint_interval: int = 10
     convergence_threshold: int = 5
     context_window: int = 32768
+    use_reflection: bool = False

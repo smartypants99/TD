@@ -66,6 +66,56 @@ class ImprovementEngine:
         t = 0.3 + (branch_index / (self.config.branch_factor - 1)) * 0.7
         return round(min(t, 1.0), 2)
 
+    def _build_reflection_prompt(
+        self,
+        original_prompt: str,
+        current_best: str,
+        directive: str,
+        current_score: int,
+        score_feedback: str = "",
+    ) -> str:
+        """Ask the model to reflect on what to change before generating."""
+        feedback_block = f"\nEvaluator feedback: {score_feedback}\n" if score_feedback else ""
+        return (
+            f"Original task: {original_prompt}\n\n"
+            f"Current solution (scored {current_score}/100):\n{current_best}\n"
+            f"{feedback_block}\n"
+            f"Improvement directive: {directive}\n\n"
+            f"Before making changes, analyze:\n"
+            f"1. What are the 2-3 most impactful changes that would raise the score?\n"
+            f"2. What should NOT be changed (things that are already good)?\n"
+            f"3. What is the biggest risk of regression?\n\n"
+            f"Be specific and concise. 3-5 sentences total."
+        )
+
+    def _generate_with_reflection(self, original_prompt: str, current_best: str, directive: str, current_score: int, history_summary: str = "", temperature: float | None = None, score_feedback: str = "") -> str | None:
+        """Generate a variant using a reflect-then-act pattern."""
+        try:
+            # Step 1: Reflect
+            reflection_prompt = self._build_reflection_prompt(
+                original_prompt, current_best, directive, current_score, score_feedback
+            )
+            reflection = self.engine.generate(reflection_prompt, temperature=0.3)
+            if not reflection:
+                return self._generate_variant(
+                    original_prompt, current_best, directive, current_score,
+                    history_summary, temperature, score_feedback
+                )
+
+            # Step 2: Generate guided by reflection
+            prompt = self._build_improvement_prompt(
+                original_prompt, current_best, directive, current_score,
+                history_summary, score_feedback
+            )
+            prompt += f"\n\nYour analysis of what to change:\n{reflection}\n\nNow produce the improved version:"
+            variant = self.engine.generate(prompt, temperature=temperature)
+            if not variant or not variant.strip():
+                return None
+            return variant
+        except Exception as e:
+            logger.warning("Reflection-based generation failed: %s", e)
+            return None
+
     def _generate_variant(self, original_prompt: str, current_best: str, directive: str, current_score: int, history_summary: str = "", temperature: float | None = None, score_feedback: str = "") -> str | None:
         """Generate a single variant, returning None on failure."""
         try:
@@ -133,11 +183,17 @@ class ImprovementEngine:
         current_best = self._maybe_summarize(current_best, original_prompt)
 
         variants = []
+        use_reflection = self.config.use_reflection and current_score >= 60
         for i in range(self.config.branch_factor):
             temp = self._branch_temperature(i)
-            variant = self._generate_variant(
-                original_prompt, current_best, directive, current_score, history_summary, temperature=temp, score_feedback=score_feedback
-            )
+            if i == 0 and use_reflection:
+                variant = self._generate_with_reflection(
+                    original_prompt, current_best, directive, current_score, history_summary, temperature=temp, score_feedback=score_feedback
+                )
+            else:
+                variant = self._generate_variant(
+                    original_prompt, current_best, directive, current_score, history_summary, temperature=temp, score_feedback=score_feedback
+                )
             if variant is not None:
                 variants.append(variant)
 
