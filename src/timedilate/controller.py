@@ -479,6 +479,7 @@ class DilationController:
                     self.checkpoint.save(cycle + 1, current_best, current_score,
                                         prompt=prompt, task_type=task_type,
                                         no_improvement_count=no_improvement_count)
+                    self.checkpoint.prune(keep=5)
 
                 completed_cycles = cycle + 1
 

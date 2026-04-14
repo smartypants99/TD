@@ -63,6 +63,24 @@ class CheckpointManager:
                 continue
         return result
 
+    def prune(self, keep: int = 5) -> int:
+        """Remove old checkpoints, keeping only the most recent `keep` files.
+        Returns the number of files removed."""
+        files = sorted(self.dir.glob("cycle_*.json"))
+        if len(files) <= keep:
+            return 0
+        to_remove = files[:-keep]
+        removed = 0
+        for f in to_remove:
+            try:
+                f.unlink()
+                removed += 1
+            except OSError as e:
+                logger.warning("Failed to prune checkpoint %s: %s", f.name, e)
+        if removed:
+            logger.info("Pruned %d old checkpoint(s), kept %d", removed, keep)
+        return removed
+
     def cleanup(self) -> None:
         for f in self.dir.glob("cycle_*.json"):
             try:

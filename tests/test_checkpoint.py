@@ -87,3 +87,28 @@ def test_list_checkpoints_skips_corrupt():
         assert len(cps) == 2
         assert cps[0]["cycle"] == 1
         assert cps[1]["cycle"] == 3
+
+
+def test_prune_keeps_recent():
+    """Prune removes old checkpoints, keeping most recent."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        mgr = CheckpointManager(tmpdir)
+        for i in range(1, 8):
+            mgr.save(cycle=i, output=f"v{i}", score=50 + i)
+        removed = mgr.prune(keep=3)
+        assert removed == 4
+        remaining = mgr.list_checkpoints()
+        assert len(remaining) == 3
+        assert remaining[0]["cycle"] == 5
+        assert remaining[-1]["cycle"] == 7
+
+
+def test_prune_noop_when_few():
+    """Prune does nothing when fewer checkpoints than keep limit."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        mgr = CheckpointManager(tmpdir)
+        mgr.save(cycle=1, output="v1", score=60)
+        mgr.save(cycle=2, output="v2", score=70)
+        removed = mgr.prune(keep=5)
+        assert removed == 0
+        assert len(mgr.list_checkpoints()) == 2
