@@ -7,7 +7,7 @@ from timedilate.scorer import Scorer
 from timedilate.directives import DirectiveGenerator
 from timedilate.checkpoint import CheckpointManager
 from timedilate.metrics import RunMetrics
-from timedilate.logging_config import log_cycle_summary
+from timedilate.logging_config import log_cycle_summary, log_run_summary
 from timedilate.meta import MetaLearner
 
 
@@ -110,6 +110,13 @@ class DilationController:
         # If stagnating, increase branches to explore more
         if metrics.stagnant_streak >= 3 and base < 5:
             return min(base + 1, 5)
+
+        # Trajectory-based: rising fast → fewer branches, declining → more
+        if len(metrics.cycles) >= 3:
+            recent = metrics.cycles[-3:]
+            avg_delta = sum(c.score - c.previous_score for c in recent) / len(recent)
+            if avg_delta >= 5 and base > 1:
+                return max(base - 1, 1)  # rising fast, save compute
 
         # Late-cycle reduction: in the last 20% of cycles with high scores,
         # reduce branches since gains are marginal and we want speed
@@ -520,6 +527,8 @@ class DilationController:
         # Use best-ever output if it's better than current
         final_output = best_ever_output if best_ever_score > current_score else current_best
         final_score = max(best_ever_score, current_score)
+
+        log_run_summary(logger, metrics)
 
         return DilationResult(
             output=final_output,

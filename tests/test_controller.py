@@ -365,3 +365,34 @@ def test_controller_target_score_early_stop():
     result = controller.run("test")
     assert result.score >= 80
     assert result.cycles_completed <= 3  # should stop after hitting 85
+
+
+def test_adaptive_branch_factor_trajectory():
+    """Adaptive branch factor should reduce when scores are rising fast."""
+    from timedilate.metrics import RunMetrics, CycleMetric
+    import time as _time
+    config = TimeDilateConfig(branch_factor=3)
+    controller = DilationController(config, make_mock_engine([]))
+    metrics = RunMetrics(start_time=_time.time(), dilation_factor=10, branch_factor=3)
+    # Rising fast: +10 per cycle
+    for i in range(3):
+        metrics.record_cycle(cycle=i+1, score=50 + (i+1)*10, previous_score=50 + i*10,
+                             directive="d", directive_source="builtin",
+                             branch_count=3, best_variant_index=0, elapsed_seconds=1.0)
+    bf = controller._adaptive_branch_factor(4, metrics)
+    assert bf < 3  # should reduce branches when rising fast
+
+
+def test_adaptive_branch_factor_stagnant():
+    """Adaptive branch factor should increase when stagnating."""
+    from timedilate.metrics import RunMetrics, CycleMetric
+    import time as _time
+    config = TimeDilateConfig(branch_factor=3)
+    controller = DilationController(config, make_mock_engine([]))
+    metrics = RunMetrics(start_time=_time.time(), dilation_factor=10, branch_factor=3)
+    for i in range(4):
+        metrics.record_cycle(cycle=i+1, score=60, previous_score=60,
+                             directive="d", directive_source="builtin",
+                             branch_count=3, best_variant_index=-1, elapsed_seconds=1.0)
+    bf = controller._adaptive_branch_factor(5, metrics)
+    assert bf > 3  # should increase branches when stagnating

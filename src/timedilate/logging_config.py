@@ -66,3 +66,22 @@ def log_cycle_summary(logger: logging.Logger, cycle: int, score: int, previous_s
     )
     record.cycle_data = data
     logger.handle(record)
+
+
+def log_run_summary(logger: logging.Logger, metrics) -> None:
+    """Emit a structured run summary with key stats and recommendations."""
+    d = metrics.to_dict()
+    lines = [
+        f"Run complete: {d['total_cycles']} cycles, "
+        f"+{d['total_improvement']} pts ({d.get('score_history', [0])[-1] if d.get('score_history') else 0}/100), "
+        f"efficiency={d['efficiency']:.0%}",
+    ]
+    recs = d.get("recommendations", [])
+    if recs:
+        lines.append(f"Recommendations: {'; '.join(recs)}")
+    msg = " | ".join(lines)
+    record = logger.makeRecord(
+        logger.name, logging.INFO, "", 0, msg, (), None
+    )
+    record.cycle_data = {"type": "run_summary", **d}
+    logger.handle(record)

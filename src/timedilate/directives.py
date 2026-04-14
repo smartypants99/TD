@@ -144,12 +144,33 @@ class DirectiveGenerator:
             return directives[cycle_index % len(directives)]
 
     def generate_custom_directive_prompt(
-        self, task_type: str, original_prompt: str, current_output: str
+        self, task_type: str, original_prompt: str, current_output: str,
+        failed_directives: set[str] | None = None,
+        current_score: int = 0,
     ) -> str:
+        failed_block = ""
+        if failed_directives:
+            failed_list = list(failed_directives)[:5]  # limit to avoid prompt bloat
+            failed_block = (
+                f"\nThese approaches were already tried and did NOT improve the score:\n"
+                + "\n".join(f"- {d}" for d in failed_list)
+                + "\nDo NOT suggest anything similar.\n"
+            )
+        score_block = ""
+        if current_score > 0:
+            score_block = f"\nThe current output scores {current_score}/100. "
+            if current_score >= 85:
+                score_block += "It's already strong — suggest a subtle, high-impact fix."
+            elif current_score >= 60:
+                score_block += "It's decent — suggest a targeted improvement."
+            else:
+                score_block += "It needs significant work — suggest a bold change."
+
         return (
             f"Given the task: {original_prompt}\n\n"
             f"And the current output:\n{current_output}\n\n"
             f"The following standard improvements have already been applied multiple times.\n"
+            f"{failed_block}{score_block}\n"
             f"Suggest ONE novel, specific improvement that would make this output meaningfully better.\n"
             f"Be creative — think of something not on this list: {', '.join(self.get_directives(task_type))}\n"
             f"Respond with just the improvement directive, one sentence, nothing else."

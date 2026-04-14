@@ -45,6 +45,16 @@ def test_build_comparative_prompt():
     assert "Output B" in prompt
 
 
+def test_comparative_prompt_task_aware():
+    scorer = Scorer()
+    code_prompt = scorer.build_comparative_prompt("Sort a list", "A", "B", task_type="code")
+    assert "correctness" in code_prompt.lower()
+    prose_prompt = scorer.build_comparative_prompt("Write essay", "A", "B", task_type="prose")
+    assert "argument" in prose_prompt.lower()
+    general_prompt = scorer.build_comparative_prompt("Do thing", "A", "B", task_type="general")
+    assert "edge case" not in general_prompt.lower()  # no code-specific hints
+
+
 def test_parse_comparison():
     scorer = Scorer()
     assert scorer.parse_comparison("A") == "A"

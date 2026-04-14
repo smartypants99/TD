@@ -296,10 +296,17 @@ class Scorer:
         )
 
     def build_comparative_prompt(
-        self, original_prompt: str, output_a: str, output_b: str
+        self, original_prompt: str, output_a: str, output_b: str,
+        task_type: str = "general",
     ) -> str:
+        task_hint = ""
+        if task_type == "code":
+            task_hint = "Focus on: correctness, edge case handling, efficiency, readability.\n\n"
+        elif task_type == "prose":
+            task_hint = "Focus on: argument strength, clarity, evidence quality, flow.\n\n"
         return (
             f"Original task: {original_prompt}\n\n"
+            f"{task_hint}"
             f"{self.COMPARATIVE_RUBRIC.format(output_a=output_a, output_b=output_b)}"
         )
 

@@ -623,7 +623,7 @@ class ImprovementEngine:
     def _compare_outputs(self, original_prompt: str, output_a: str, output_b: str) -> str:
         """A/B compare two outputs, returns 'A', 'B', or 'TIE'."""
         try:
-            prompt = self.scorer.build_comparative_prompt(original_prompt, output_a, output_b)
+            prompt = self.scorer.build_comparative_prompt(original_prompt, output_a, output_b, task_type=self.task_type)
             raw = self.engine.generate(prompt, temperature=self.config.scoring_temperature)
             return self.scorer.parse_comparison(raw)
         except Exception as e:
