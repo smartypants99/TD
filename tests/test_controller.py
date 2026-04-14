@@ -37,7 +37,12 @@ def test_controller_convergence_detection():
     config = TimeDilateConfig(dilation_factor=6, branch_factor=1, convergence_threshold=3)
     responses = ["initial output", "80"]
     # 5 cycles where nothing improves
-    for _ in range(5):
+    for _ in range(3):
+        responses.extend(["same output", "70"])
+    # After 3 no-improvement cycles, fresh_attempt fires (generate + score)
+    responses.extend(["fresh output", "65"])  # fresh attempt doesn't beat 80
+    # 2 more cycles
+    for _ in range(2):
         responses.extend(["same output", "70"])
     mock_engine = make_mock_engine(responses)
     controller = DilationController(config, mock_engine)

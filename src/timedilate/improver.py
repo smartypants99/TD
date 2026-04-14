@@ -101,6 +101,24 @@ class ImprovementEngine:
             logger.warning("Scoring failed: %s", e)
             return 0
 
+    def fresh_attempt(self, original_prompt: str, directive: str) -> tuple[str | None, int]:
+        """Generate a completely fresh attempt (not based on current best).
+        Returns (output, score). Used when refinement has plateaued."""
+        try:
+            prompt = (
+                f"{original_prompt}\n\n"
+                f"Additional guidance: {directive}\n\n"
+                f"Produce an excellent, complete solution. Output ONLY the solution."
+            )
+            output = self.engine.generate(prompt)
+            if not output or not output.strip():
+                return None, 0
+            score = self._score_variant(original_prompt, output)
+            return output, score
+        except Exception as e:
+            logger.warning("Fresh attempt failed: %s", e)
+            return None, 0
+
     def run_cycle(
         self,
         original_prompt: str,

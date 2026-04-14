@@ -221,6 +221,32 @@ def test_tournament_with_odd_number():
     assert idx == 0
 
 
+def test_fresh_attempt():
+    """Fresh attempt generates from scratch, not from current best."""
+    engine = make_mock_engine(["fresh solution", "85"])
+    config = TimeDilateConfig(branch_factor=1)
+    improver = ImprovementEngine(engine, config)
+    output, score = improver.fresh_attempt("Write hello world", "Be creative")
+    assert output == "fresh solution"
+    assert score == 85
+    # Check prompt doesn't reference current best
+    call_args = engine.generate.call_args_list[0]
+    prompt_text = call_args[0][0]
+    assert "current" not in prompt_text.lower() or "Current solution" not in prompt_text
+
+
+def test_fresh_attempt_failure():
+    """Fresh attempt handles errors gracefully."""
+    engine = MagicMock()
+    engine.generate = MagicMock(side_effect=RuntimeError("crash"))
+    engine.estimate_tokens = MagicMock(return_value=100)
+    config = TimeDilateConfig(branch_factor=1)
+    improver = ImprovementEngine(engine, config)
+    output, score = improver.fresh_attempt("test", "directive")
+    assert output is None
+    assert score == 0
+
+
 def test_score_feedback_in_improvement_prompt():
     """Score feedback is included in the improvement prompt."""
     engine = make_mock_engine(["improved", "88"])

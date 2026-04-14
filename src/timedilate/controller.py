@@ -190,6 +190,15 @@ class DilationController:
 
                 if no_improvement_count >= self.config.convergence_threshold:
                     convergence_detected = True
+                    # Try a fresh attempt to break out of plateau
+                    fresh_output, fresh_score = self.improver.fresh_attempt(
+                        prompt, directive
+                    )
+                    if fresh_output and fresh_score > current_score:
+                        logger.info("Fresh attempt broke plateau (score %d -> %d)",
+                                    current_score, fresh_score)
+                        current_best = fresh_output
+                        current_score = fresh_score
                     if not built_in_exhausted:
                         directive_offset += built_in_count
                         if directive_offset >= built_in_count * 2:
