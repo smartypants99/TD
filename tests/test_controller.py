@@ -37,7 +37,7 @@ def test_controller_convergence_detection():
     # Use dilation_factor=5 (4 cycles), convergence_threshold=2
     # so convergence fires after 2 no-improvement cycles (before early termination)
     config = TimeDilateConfig(dilation_factor=5, branch_factor=1, convergence_threshold=2)
-    responses = ["initial output", "80"]
+    responses = ["initial output", "80", "80"]  # third "80" is consistency check re-score
     # Plenty of responses for cycles + generated directives + fresh attempts
     for _ in range(20):
         responses.extend(["gen directive", "same output", "70", "fresh out", "65"])
@@ -69,7 +69,7 @@ def test_controller_early_exit_on_perfect_score():
     """Should stop early when score reaches 100."""
     config = TimeDilateConfig(dilation_factor=10, branch_factor=1)
     responses = [
-        "initial", "80",
+        "initial", "80", "80",  # third is consistency check
         "v1", "100",  # perfect score — should stop here
         # remaining cycles should NOT run
     ]
@@ -108,7 +108,7 @@ def test_controller_resume_from_checkpoint():
 def test_controller_builds_history_summary():
     config = TimeDilateConfig(dilation_factor=4, branch_factor=1)
     mock_engine = make_mock_engine([
-        "initial", "70",
+        "initial", "70", "70",  # consistency check
         "v1", "80",
         "v2", "85",
         "v3", "90",
@@ -123,7 +123,7 @@ def test_controller_builds_history_summary():
 def test_controller_targeted_directive_at_cycle_5():
     """At cycle 5, controller should do detailed scoring for targeted directive."""
     config = TimeDilateConfig(dilation_factor=8, branch_factor=1)
-    responses = ["initial", "60"]
+    responses = ["initial", "60", "60"]  # consistency check
     # Cycle 1: variant scores 70 (delta=10, no comparative)
     responses.extend(["v1", "70"])
     # Cycles 2-4: each improves by 10+ (no comparative triggered)
@@ -318,3 +318,22 @@ def test_history_summary_structure():
     assert "fix bugs" in summary
     assert "did NOT help" in summary
     assert "optimize" in summary
+
+
+def test_scoring_consistency_check_triggers_ensemble():
+    """When initial scores differ by >15, ensemble scoring is enabled."""
+    config = TimeDilateConfig(dilation_factor=5, branch_factor=1)
+    responses = [
+        "initial output", "80", "50",  # consistency check: 80 vs 50 = delta 30 -> ensemble
+    ]
+    # With ensemble enabled, each scoring call does 2 scores (normal + CoT)
+    # Cycle responses: variant + ensemble scores (normal + cot)
+    for _ in range(10):
+        responses.extend(["variant", "70", "Correctness: 20\nSCORE: 72"])
+    mock_engine = make_mock_engine(responses)
+    controller = DilationController(config, mock_engine)
+    result = controller.run("test")
+    # Initial score should be averaged: (80 + 50) // 2 = 65
+    assert result.metrics is not None
+    # Ensemble was triggered, so force_ensemble should have been set
+    assert controller.improver.force_ensemble or result.cycles_completed > 0

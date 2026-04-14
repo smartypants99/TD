@@ -194,6 +194,32 @@ class DilationController:
             current_score = self.scorer.parse_score(raw_score)
 
         self.improver.initial_output_length = len(current_best)
+
+        # Scoring consistency check: re-score initial output to detect unreliable scoring
+        if not resume and refinement_cycles >= 3:
+            try:
+                if task_type != "general":
+                    check_prompt = self.scorer.build_task_aware_scoring_prompt(prompt, current_best, task_type)
+                else:
+                    check_prompt = self.scorer.build_scoring_prompt(prompt, current_best)
+                raw_check = self.engine.generate(check_prompt, temperature=self.config.scoring_temperature)
+                check_score = self.scorer.parse_score(raw_check)
+                score_delta = abs(current_score - check_score)
+                if score_delta > 15:
+                    logger.warning(
+                        "Scoring inconsistency detected: %d vs %d (delta=%d). "
+                        "Enabling ensemble scoring for this run.",
+                        current_score, check_score, score_delta
+                    )
+                    self.improver.force_ensemble = True
+                    # Use average as the baseline
+                    current_score = (current_score + check_score) // 2
+                elif score_delta > 0:
+                    logger.info("Scoring consistency check: %d vs %d (delta=%d, acceptable)",
+                                current_score, check_score, score_delta)
+            except Exception:
+                logger.debug("Scoring consistency check failed, continuing normally")
+
         no_improvement_count = 0
         convergence_detected = False
         built_in_exhausted = False

@@ -28,7 +28,7 @@ def test_full_pipeline_dilation_2x():
 def test_full_pipeline_dilation_5x():
     config = TimeDilateConfig(dilation_factor=5, branch_factor=1)
     responses = [
-        "v0", "50",
+        "v0", "50", "50",  # third is consistency check re-score
         "v1", "60",
         "v2", "70",
         "v3", "80",
