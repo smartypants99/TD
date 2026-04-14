@@ -71,6 +71,16 @@ class DirectiveGenerator:
         directives = self.get_directives(task_type)
         return directives[cycle_index % len(directives)]
 
+    def directive_for_weakness(self, weakest_aspect: str) -> str:
+        """Generate a directive that targets a specific weakness."""
+        aspect_directives = {
+            "correctness": "Focus on fixing any bugs, logical errors, or factual inaccuracies. Verify every claim and every code path.",
+            "completeness": "The output is missing important parts. Add anything that was asked for but not delivered. Cover all aspects of the task.",
+            "quality": "Improve structure, readability, and polish. Better formatting, clearer organization, more professional presentation.",
+            "elegance": "Refactor for cleaner design. Simplify where possible, use better patterns, make the approach more efficient and well-designed.",
+        }
+        return aspect_directives.get(weakest_aspect, "Improve the overall quality.")
+
     def generate_custom_directive_prompt(
         self, task_type: str, original_prompt: str, current_output: str
     ) -> str:

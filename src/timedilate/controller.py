@@ -132,8 +132,22 @@ class DilationController:
                     **{**self.config.__dict__, "branch_factor": branch_factor}
                 )
 
-                # Choose directive: built-in or self-generated
-                if built_in_exhausted:
+                # Every 5 cycles, do a detailed score to target weaknesses
+                if cycle > 0 and cycle % 5 == 0:
+                    try:
+                        detail_prompt = self.scorer.build_detailed_scoring_prompt(prompt, current_best)
+                        detail_raw = self.engine.generate(detail_prompt, temperature=self.config.scoring_temperature)
+                        detailed = self.scorer.parse_detailed_score(detail_raw)
+                        weakness = detailed.weakest_aspect
+                        directive = self.directives.directive_for_weakness(weakness)
+                        directive_source = "targeted"
+                        logger.info("Cycle %d: targeting weakest aspect '%s' (scores: %s)",
+                                    cycle + 1, weakness, detailed.to_dict())
+                    except Exception:
+                        logger.warning("Detailed scoring failed, falling back to normal directive")
+                        directive = self.directives.next_directive(task_type, cycle + directive_offset)
+                        directive_source = "builtin"
+                elif built_in_exhausted:
                     custom_prompt = self.directives.generate_custom_directive_prompt(
                         task_type, prompt, current_best
                     )

@@ -43,3 +43,21 @@ def test_custom_directive_generation_prompt():
         "code", "Write a sorting function", "def sort(lst): return sorted(lst)"
     )
     assert "improve" in prompt.lower() or "novel" in prompt.lower()
+
+
+def test_directive_for_weakness():
+    gen = DirectiveGenerator()
+    d = gen.directive_for_weakness("correctness")
+    assert "bug" in d.lower() or "error" in d.lower() or "fix" in d.lower()
+    d = gen.directive_for_weakness("completeness")
+    assert "missing" in d.lower() or "add" in d.lower()
+    d = gen.directive_for_weakness("quality")
+    assert "structure" in d.lower() or "readab" in d.lower()
+    d = gen.directive_for_weakness("elegance")
+    assert "refactor" in d.lower() or "clean" in d.lower()
+
+
+def test_directive_for_unknown_weakness():
+    gen = DirectiveGenerator()
+    d = gen.directive_for_weakness("unknown")
+    assert "improve" in d.lower()
