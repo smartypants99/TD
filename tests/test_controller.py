@@ -89,16 +89,33 @@ def test_controller_resume_from_checkpoint():
         mgr = CheckpointManager(tmpdir)
         mgr.save(cycle=2, output="checkpoint_output", score=80)
 
-        # Only need responses for cycles 3 and 4 (resuming from 2)
+        # Responses for cycles 3 and 4 (resuming from 2)
+        # Cycle 3: v3 scores 85 (delta=5 from 80, comparative -> B confirms)
+        # Cycle 4: v4 scores 95 (delta=10, no comparative needed)
         mock_engine = make_mock_engine([
-            "v3", "85",
-            "v4", "90",
+            "v3", "85", "B",   # cycle 3 + comparative check
+            "v4", "95",        # cycle 4 (large delta, no comparative)
         ])
         controller = DilationController(config, mock_engine)
         result = controller.run("test", resume=True)
         assert result.resumed_from_cycle == 2
         assert result.cycles_completed == 4
-        assert result.score == 90
+        assert result.score == 95
+
+
+def test_controller_builds_history_summary():
+    config = TimeDilateConfig(dilation_factor=4, branch_factor=1)
+    mock_engine = make_mock_engine([
+        "initial", "70",
+        "v1", "80",
+        "v2", "85",
+        "v3", "90",
+    ])
+    controller = DilationController(config, mock_engine)
+    result = controller.run("test")
+    # After 3 cycles, history should have been built for later cycles
+    assert result.metrics is not None
+    assert len(result.metrics.cycles) == 3
 
 
 def test_controller_has_metrics():

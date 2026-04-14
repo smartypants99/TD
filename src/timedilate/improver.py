@@ -13,14 +13,24 @@ class ImprovementEngine:
         self.scorer = Scorer()
 
     def _build_improvement_prompt(
-        self, original_prompt: str, current_best: str, directive: str, current_score: int = 0
+        self,
+        original_prompt: str,
+        current_best: str,
+        directive: str,
+        current_score: int = 0,
+        history_summary: str = "",
     ) -> str:
+        history_block = ""
+        if history_summary:
+            history_block = f"Previous improvement attempts:\n{history_summary}\n\n"
         return (
             f"Original task: {original_prompt}\n\n"
             f"Current solution (scored {current_score}/100):\n{current_best}\n\n"
+            f"{history_block}"
             f"Improvement directive: {directive}\n\n"
             f"Produce a meaningfully improved version. Think carefully about what "
             f"specific changes will increase the quality score. "
+            f"Do NOT repeat changes that already failed to improve the score. "
             f"Output ONLY the improved solution, nothing else."
         )
 
@@ -39,11 +49,11 @@ class ImprovementEngine:
         )
         return self.engine.generate(summary_prompt)
 
-    def _generate_variant(self, original_prompt: str, current_best: str, directive: str, current_score: int) -> str | None:
+    def _generate_variant(self, original_prompt: str, current_best: str, directive: str, current_score: int, history_summary: str = "") -> str | None:
         """Generate a single variant, returning None on failure."""
         try:
             prompt = self._build_improvement_prompt(
-                original_prompt, current_best, directive, current_score
+                original_prompt, current_best, directive, current_score, history_summary
             )
             variant = self.engine.generate(prompt)
             if not variant or not variant.strip():
@@ -72,6 +82,7 @@ class ImprovementEngine:
         current_best: str,
         current_score: int,
         directive: str,
+        history_summary: str = "",
     ) -> tuple[str, int, int]:
         """Returns (best_output, best_score, best_variant_index).
         best_variant_index is -1 if no variant beat the current best."""
@@ -80,7 +91,7 @@ class ImprovementEngine:
         variants = []
         for _ in range(self.config.branch_factor):
             variant = self._generate_variant(
-                original_prompt, current_best, directive, current_score
+                original_prompt, current_best, directive, current_score, history_summary
             )
             if variant is not None:
                 variants.append(variant)
@@ -100,4 +111,23 @@ class ImprovementEngine:
                 best_score = score
                 best_index = i
 
+        # Comparative validation: if we found a better variant and scores are close,
+        # do an A/B comparison to confirm the improvement is real
+        if best_index >= 0 and (best_score - current_score) <= 5:
+            winner = self._compare_outputs(original_prompt, current_best, best_variant)
+            if winner == "A":
+                logger.info("Comparative check overruled score-based selection (delta=%d)",
+                            best_score - current_score)
+                return current_best, current_score, -1
+
         return best_variant, best_score, best_index
+
+    def _compare_outputs(self, original_prompt: str, output_a: str, output_b: str) -> str:
+        """A/B compare two outputs, returns 'A', 'B', or 'TIE'."""
+        try:
+            prompt = self.scorer.build_comparative_prompt(original_prompt, output_a, output_b)
+            raw = self.engine.generate(prompt, temperature=self.config.scoring_temperature)
+            return self.scorer.parse_comparison(raw)
+        except Exception as e:
+            logger.warning("Comparison failed: %s", e)
+            return "TIE"

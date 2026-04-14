@@ -103,3 +103,53 @@ def test_variant_index_tracking():
     )
     assert idx == 1  # v2 scored highest
     assert best == "v2"
+
+
+def test_history_summary_in_prompt():
+    """History summary is included in the improvement prompt."""
+    engine = make_mock_engine(["improved", "88"])
+    config = TimeDilateConfig(branch_factor=1)
+    improver = ImprovementEngine(engine, config)
+    best, score, idx = improver.run_cycle(
+        original_prompt="test",
+        current_best="original",
+        current_score=50,
+        directive="Improve.",
+        history_summary='- Cycle 1: "Fix bugs" -> no improvement (score 50->50)',
+    )
+    # Should still work, the history is passed through to the prompt
+    assert best == "improved"
+    assert score == 88
+
+
+def test_comparative_overrule_on_close_score():
+    """When scores are close (<=5), comparative check can overrule."""
+    # variant scores 53 (only 3 above current 50), comparative says A is better
+    engine = make_mock_engine(["variant", "53", "A"])
+    config = TimeDilateConfig(branch_factor=1)
+    improver = ImprovementEngine(engine, config)
+    best, score, idx = improver.run_cycle(
+        original_prompt="test",
+        current_best="original",
+        current_score=50,
+        directive="Improve.",
+    )
+    assert best == "original"  # overruled by comparative
+    assert score == 50
+    assert idx == -1
+
+
+def test_no_comparative_on_large_delta():
+    """When score improvement is large (>5), skip comparative check."""
+    engine = make_mock_engine(["variant", "80"])  # delta=30, no comparison call
+    config = TimeDilateConfig(branch_factor=1)
+    improver = ImprovementEngine(engine, config)
+    best, score, idx = improver.run_cycle(
+        original_prompt="test",
+        current_best="original",
+        current_score=50,
+        directive="Improve.",
+    )
+    assert best == "variant"
+    assert score == 80
+    assert idx == 0

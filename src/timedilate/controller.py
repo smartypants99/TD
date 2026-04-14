@@ -33,6 +33,17 @@ class DilationController:
         self.directives = DirectiveGenerator()
         self.checkpoint = CheckpointManager(config.checkpoint_dir)
 
+    def _build_history_summary(self, metrics: RunMetrics, max_entries: int = 5) -> str:
+        """Build a concise summary of recent cycles for the improvement prompt."""
+        if not metrics.cycles:
+            return ""
+        recent = metrics.cycles[-max_entries:]
+        lines = []
+        for c in recent:
+            improved = "improved" if c.score > c.previous_score else "no improvement"
+            lines.append(f"- Cycle {c.cycle}: \"{c.directive}\" -> {improved} (score {c.previous_score}->{c.score})")
+        return "\n".join(lines)
+
     def _adaptive_branch_factor(self, cycle: int, metrics: RunMetrics) -> int:
         """Reduce branch factor if cycles are slow or stagnating."""
         base = self.config.branch_factor
@@ -135,11 +146,13 @@ class DilationController:
                     directive_source = "builtin"
 
                 previous_score = current_score
+                history_summary = self._build_history_summary(metrics)
                 new_best, new_score, best_idx = self.improver.run_cycle(
                     original_prompt=prompt,
                     current_best=current_best,
                     current_score=current_score,
                     directive=directive,
+                    history_summary=history_summary,
                 )
 
                 if new_score > current_score:
