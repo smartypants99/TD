@@ -121,6 +121,17 @@ def test_save_without_score_history_defaults_empty():
         assert result["score_history"] == []
 
 
+def test_save_with_metrics_summary():
+    """Checkpoint saves metrics_summary for resume context."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        mgr = CheckpointManager(tmpdir)
+        mgr.save(cycle=5, output="code", score=80,
+                 metrics_summary={"efficiency": 0.6, "peak_score": 85})
+        result = mgr.load_latest()
+        assert result["metrics_summary"]["efficiency"] == 0.6
+        assert result["metrics_summary"]["peak_score"] == 85
+
+
 def test_prune_noop_when_few():
     """Prune does nothing when fewer checkpoints than keep limit."""
     with tempfile.TemporaryDirectory() as tmpdir:

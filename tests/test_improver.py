@@ -1036,6 +1036,21 @@ def test_reflection_threshold_override():
     assert "Before making changes" in first_call
 
 
+def test_preserve_block_in_improvement_prompt():
+    """When score_feedback has PRESERVE/FIX sections, they're split into separate blocks."""
+    engine = make_mock_engine(["improved", "85"])
+    config = TimeDilateConfig(branch_factor=1)
+    improver = ImprovementEngine(engine, config)
+    feedback = "PRESERVE these strengths:\n- Good error handling\nFIX these weaknesses:\n1. Missing edge cases"
+    best, score, idx = improver.run_cycle(
+        "test", "original", 60, "Improve.", score_feedback=feedback
+    )
+    gen_call = engine.generate.call_args_list[0][0][0]
+    assert "DO NOT CHANGE" in gen_call
+    assert "Good error handling" in gen_call
+    assert "Missing edge cases" in gen_call
+
+
 def test_fresh_attempt_includes_feedback():
     """Fresh attempt incorporates best_feedback in the prompt."""
     engine = make_mock_engine(["fresh output", "85"])

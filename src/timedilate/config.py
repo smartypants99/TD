@@ -49,6 +49,8 @@ class TimeDilateConfig:
                 raise ConfigError(f"task_type_override must be one of {valid_types}, got '{self.task_type_override}'")
         if not (0 <= self.target_score <= 100):
             raise ConfigError(f"target_score must be 0-100, got {self.target_score}")
+        if self.max_output_tokens < 0:
+            raise ConfigError(f"max_output_tokens must be >= 0, got {self.max_output_tokens}")
         if self.score_weights is not None:
             valid_keys = {"correctness", "completeness", "quality", "elegance"}
             invalid = set(self.score_weights.keys()) - valid_keys

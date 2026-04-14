@@ -16,7 +16,8 @@ class CheckpointManager:
 
     def save(self, cycle: int, output: str, score: int,
              prompt: str = "", task_type: str = "", no_improvement_count: int = 0,
-             score_history: list[int] | None = None) -> None:
+             score_history: list[int] | None = None,
+             metrics_summary: dict | None = None) -> None:
         path = self.dir / f"cycle_{cycle:06d}.json"
         tmp_path = path.with_suffix(".json.tmp")
         try:
@@ -29,6 +30,7 @@ class CheckpointManager:
                 "no_improvement_count": no_improvement_count,
                 "score_history": score_history or [],
                 "timestamp": time.time(),
+                "metrics_summary": metrics_summary or {},
             })
             # Atomic write: write to tmp then rename to avoid corrupt checkpoints
             tmp_path.write_text(data)

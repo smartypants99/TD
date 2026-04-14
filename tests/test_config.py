@@ -45,3 +45,9 @@ def test_valid_task_type_override():
 def test_valid_score_weights():
     config = TimeDilateConfig(score_weights={"correctness": 60, "completeness": 20, "quality": 10, "elegance": 10})
     config.validate()  # should not raise
+
+
+def test_invalid_max_output_tokens():
+    config = TimeDilateConfig(max_output_tokens=-1)
+    with pytest.raises(ConfigError):
+        config.validate()

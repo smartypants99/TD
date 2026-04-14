@@ -37,8 +37,15 @@ class ImprovementEngine:
         if history_summary:
             history_block = f"Previous improvement attempts:\n{history_summary}\n\n"
         feedback_block = ""
+        preserve_block = ""
         if score_feedback:
-            feedback_block = f"Evaluator feedback on current solution:\n{score_feedback}\n\n"
+            # Split PRESERVE and FIX sections if present
+            if "PRESERVE" in score_feedback and "FIX" in score_feedback:
+                parts = score_feedback.split("FIX", 1)
+                preserve_block = f"DO NOT CHANGE these working parts:\n{parts[0].replace('PRESERVE these strengths:', '').strip()}\n\n"
+                feedback_block = f"Evaluator feedback — fix these:\n{parts[1].strip()}\n\n"
+            else:
+                feedback_block = f"Evaluator feedback on current solution:\n{score_feedback}\n\n"
 
         # Check if prompt would exceed context budget (60% of window, leaving room for generation)
         prompt_budget = int(self.config.context_window * 0.6)
@@ -118,6 +125,7 @@ class ImprovementEngine:
         return (
             f"Original task: {original_prompt}\n\n"
             f"Current solution (scored {current_score}/100):\n{score_context}{current_best}\n\n"
+            f"{preserve_block}"
             f"{feedback_block}"
             f"{history_block}"
             f"{exemplar_block}"
