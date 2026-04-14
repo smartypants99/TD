@@ -23,7 +23,27 @@ class MetaLearner:
         return {"directive_stats": {}}
 
     def save(self) -> None:
-        self.path.write_text(json.dumps(self.data, indent=2))
+        """Atomic save: write to temp file then rename to avoid corruption."""
+        self._prune_stale()
+        tmp = self.path.with_suffix(".tmp")
+        try:
+            tmp.write_text(json.dumps(self.data, indent=2))
+            tmp.replace(self.path)
+        except OSError as e:
+            logger.warning("Failed to save meta data: %s", e)
+            tmp.unlink(missing_ok=True)
+
+    def _prune_stale(self, max_entries: int = 200) -> None:
+        """Remove low-value entries to keep the file bounded."""
+        stats = self.data.get("directive_stats", {})
+        if len(stats) <= max_entries:
+            return
+        # Sort by attempts (least used first) and remove the excess
+        sorted_keys = sorted(stats, key=lambda k: stats[k]["attempts"])
+        to_remove = len(stats) - max_entries
+        for key in sorted_keys[:to_remove]:
+            del stats[key]
+        logger.info("Pruned %d stale meta-learning entries", to_remove)
 
     def record_directive(self, task_type: str, directive: str, improved: bool,
                          score_delta: int = 0) -> None:

@@ -92,6 +92,37 @@ def test_worst_directives():
         assert "Good approach" not in worst
 
 
+def test_atomic_save_survives_reload():
+    """Atomic save should produce a valid file that can be reloaded."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = str(Path(tmpdir) / "meta.json")
+        ml = MetaLearner(path)
+        ml.record_directive("code", "Test", True, score_delta=5)
+        ml.save()
+        # No .tmp file should remain
+        assert not Path(path).with_suffix(".tmp").exists()
+        ml2 = MetaLearner(path)
+        assert ml2.effectiveness("code")["Test"] == 1.0
+
+
+def test_prune_stale_entries():
+    """Pruning should remove lowest-attempt entries when over max."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = str(Path(tmpdir) / "meta.json")
+        ml = MetaLearner(path)
+        # Add 5 entries with varying attempts
+        for i in range(5):
+            for _ in range(i + 1):
+                ml.record_directive("code", f"directive_{i}", True)
+        # Prune to keep only 3
+        ml._prune_stale(max_entries=3)
+        stats = ml.data["directive_stats"]
+        assert len(stats) == 3
+        # Should have kept the ones with most attempts (directive_2, 3, 4)
+        keys = list(stats.keys())
+        assert all(f"directive_{i}" in k for k, i in zip(sorted(keys), [2, 3, 4]))
+
+
 def test_worst_directives_needs_min_attempts():
     with tempfile.TemporaryDirectory() as tmpdir:
         path = str(Path(tmpdir) / "meta.json")
