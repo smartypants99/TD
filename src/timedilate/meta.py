@@ -11,6 +11,7 @@ class MetaLearner:
 
     def __init__(self, path: str = ".timedilate_meta.json"):
         self.path = Path(path)
+        self._loaded_from_disk = self.path.exists()
         self.data = self._load()
 
     def _load(self) -> dict:
@@ -35,7 +36,10 @@ class MetaLearner:
             stats[key]["successes"] += 1
 
     def best_directives(self, task_type: str, top_n: int = 3) -> list[str]:
-        """Return the top N directives by success rate for a task type."""
+        """Return the top N directives by success rate for a task type.
+        Only returns results if data was loaded from a previous run on disk."""
+        if not self._loaded_from_disk:
+            return []
         stats = self.data["directive_stats"]
         candidates = []
         for key, val in stats.items():

@@ -122,6 +122,32 @@ class RunMetrics:
         return [max(0, c.score - c.previous_score) for c in self.cycles]
 
     @property
+    def projected_final_score(self) -> int | None:
+        """Simple linear projection of final score based on recent trend.
+        Returns None if insufficient data."""
+        if len(self.cycles) < 3:
+            return None
+        recent = self.cycles[-3:]
+        gains = [c.score - c.previous_score for c in recent]
+        avg_gain = sum(gains) / len(gains)
+        remaining = self.dilation_factor - 1 - len(self.cycles)
+        if remaining <= 0:
+            return self.cycles[-1].score
+        projected = self.cycles[-1].score + avg_gain * remaining
+        return max(0, min(100, int(projected)))
+
+    @property
+    def should_early_terminate(self) -> bool:
+        """Recommend early termination if projected gains are negligible."""
+        proj = self.projected_final_score
+        if proj is None:
+            return False
+        current = self.cycles[-1].score if self.cycles else 0
+        remaining = self.dilation_factor - 1 - len(self.cycles)
+        # Stop if projected gain is < 2 points over remaining cycles
+        return remaining > 2 and (proj - current) < 2
+
+    @property
     def diminishing_returns(self) -> bool:
         """True if last 3+ cycles averaged < 1 point improvement."""
         if len(self.cycles) < 3:

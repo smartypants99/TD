@@ -34,7 +34,7 @@ class DilationController:
         self.scorer = Scorer()
         self.directives = DirectiveGenerator()
         self.checkpoint = CheckpointManager(config.checkpoint_dir)
-        self.meta = MetaLearner()
+        self.meta = MetaLearner(path=config.checkpoint_dir + "/.meta.json")
 
     def _build_history_summary(self, metrics: RunMetrics, max_entries: int = 5) -> str:
         """Build a concise summary of recent cycles for the improvement prompt."""
@@ -245,6 +245,12 @@ class DilationController:
                 # Early exit if perfect score
                 if current_score >= 100:
                     logger.info("Perfect score reached at cycle %d", cycle + 1)
+                    break
+
+                # Early termination if projected gains are negligible
+                if metrics.should_early_terminate:
+                    logger.info("Early termination: projected gains negligible at cycle %d (score %d)",
+                                cycle + 1, current_score)
                     break
 
                 if on_cycle:

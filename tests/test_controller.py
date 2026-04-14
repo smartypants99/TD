@@ -127,15 +127,17 @@ def test_controller_targeted_directive_at_cycle_5():
     """At cycle 5, controller should do detailed scoring for targeted directive."""
     config = TimeDilateConfig(dilation_factor=8, branch_factor=1)
     responses = ["initial", "60"]
-    # Cycles 1-4: normal
-    for i in range(4):
-        responses.extend([f"v{i+1}", f"{65 + i * 5}"])
+    # Cycle 1: variant scores 70 (delta=10, no comparative)
+    responses.extend(["v1", "70"])
+    # Cycles 2-4: each improves by 10+ (no comparative triggered)
+    for i in range(3):
+        responses.extend([f"v{i+2}", f"{80 + i * 3}"])
     # Cycle 5: detailed score response + targeted improvement + score
     responses.append("C:20 K:10 Q:18 E:15")  # detailed score (completeness weakest)
-    responses.extend(["v5_targeted", "90"])
+    responses.extend(["v5_targeted", "95"])
     # Cycles 6-7: normal
     for i in range(2):
-        responses.extend([f"v{6+i}", f"{92 + i}"])
+        responses.extend([f"v{6+i}", f"{96 + i}"])
     mock_engine = make_mock_engine(responses)
     controller = DilationController(config, mock_engine)
     result = controller.run("test")

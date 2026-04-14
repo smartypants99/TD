@@ -27,7 +27,9 @@ def test_best_directives_minimum_attempts():
         ml.record_directive("code", "One shot", True)  # only 1 attempt
         ml.record_directive("code", "Reliable", True)
         ml.record_directive("code", "Reliable", True)
-        best = ml.best_directives("code")
+        ml.save()
+        ml2 = MetaLearner(path)
+        best = ml2.best_directives("code")
         assert len(best) == 1  # "One shot" excluded (< 2 attempts)
         assert best[0] == "Reliable"
 
@@ -58,6 +60,8 @@ def test_task_type_isolation():
         ml.record_directive("code", "Fix bugs", True)
         ml.record_directive("prose", "Improve flow", True)
         ml.record_directive("prose", "Improve flow", True)
-        assert ml.best_directives("code")[0] == "Fix bugs"
-        assert ml.best_directives("prose")[0] == "Improve flow"
-        assert "Improve flow" not in ml.best_directives("code")
+        ml.save()
+        ml2 = MetaLearner(path)
+        assert ml2.best_directives("code")[0] == "Fix bugs"
+        assert ml2.best_directives("prose")[0] == "Improve flow"
+        assert "Improve flow" not in ml2.best_directives("code")

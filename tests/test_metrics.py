@@ -152,6 +152,32 @@ def test_diminishing_returns_not_detected():
     assert m.diminishing_returns is False
 
 
+def test_projected_final_score():
+    m = RunMetrics(dilation_factor=10, start_time=time.time())
+    for i in range(4):
+        m.record_cycle(cycle=i+1, score=60+i*5, previous_score=55+i*5, directive="d",
+                       directive_source="builtin", branch_count=1, best_variant_index=0, elapsed_seconds=0.1)
+    proj = m.projected_final_score
+    assert proj is not None
+    assert proj > 75  # trending up by 5/cycle with 5 remaining
+
+
+def test_should_early_terminate_stagnant():
+    m = RunMetrics(dilation_factor=20, start_time=time.time())
+    for i in range(5):
+        m.record_cycle(cycle=i+1, score=80, previous_score=80, directive="d",
+                       directive_source="builtin", branch_count=1, best_variant_index=-1, elapsed_seconds=0.1)
+    assert m.should_early_terminate is True  # no gains projected
+
+
+def test_should_not_early_terminate_improving():
+    m = RunMetrics(dilation_factor=10, start_time=time.time())
+    for i in range(4):
+        m.record_cycle(cycle=i+1, score=60+i*5, previous_score=55+i*5, directive="d",
+                       directive_source="builtin", branch_count=1, best_variant_index=0, elapsed_seconds=0.1)
+    assert m.should_early_terminate is False  # still improving
+
+
 def test_summary():
     m = RunMetrics(prompt="write sort", task_type="code", dilation_factor=5, branch_factor=1, start_time=time.time())
     m.record_cycle(cycle=1, score=70, previous_score=50, directive="fix bugs", directive_source="builtin",
