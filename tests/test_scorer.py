@@ -116,6 +116,19 @@ def test_parse_cot_score_clamps():
     assert scorer.parse_cot_score("SCORE: 0") == 0
 
 
+def test_progressive_scoring_harsh_at_high_score():
+    scorer = Scorer()
+    prompt = scorer.build_progressive_scoring_prompt("test", "output", current_score=85)
+    assert "EXTRA critical" in prompt
+    assert "85" in prompt
+
+
+def test_progressive_scoring_normal_at_low_score():
+    scorer = Scorer()
+    prompt = scorer.build_progressive_scoring_prompt("test", "output", current_score=50)
+    assert "EXTRA critical" not in prompt
+
+
 def test_task_aware_scoring_code():
     scorer = Scorer()
     prompt = scorer.build_task_aware_scoring_prompt("write sort", "def sort(): pass", "code")

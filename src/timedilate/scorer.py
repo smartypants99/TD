@@ -120,6 +120,24 @@ class Scorer:
             return base + self.PROSE_RUBRIC_ADDENDUM
         return base
 
+    HARSH_ADDENDUM = (
+        "\nIMPORTANT: This output has already been refined multiple times and scored {score}/100. "
+        "At this level, be EXTRA critical. Look for subtle issues:\n"
+        "- Edge cases not handled\n"
+        "- Minor inefficiencies\n"
+        "- Opportunities for cleaner design\n"
+        "- Missing documentation or unclear naming\n"
+        "Do NOT give a higher score unless the output is genuinely better. "
+        "Score inflation is a bigger problem than being too harsh."
+    )
+
+    def build_progressive_scoring_prompt(self, original_prompt: str, output: str, current_score: int) -> str:
+        """Scoring prompt that gets progressively harsher as scores increase."""
+        base = self.build_scoring_prompt(original_prompt, output)
+        if current_score >= 75:
+            base += self.HARSH_ADDENDUM.format(score=current_score)
+        return base
+
     def build_task_aware_scoring_prompt(self, original_prompt: str, output: str, task_type: str) -> str:
         rubric = self._rubric_for_task(task_type)
         return (
