@@ -67,6 +67,18 @@ class DilationController:
 
         return base
 
+    def _should_prefer_generated(self, metrics: RunMetrics) -> bool:
+        """After enough data, prefer generated directives if they outperform builtins."""
+        eff = metrics.directive_effectiveness
+        if "builtin" not in eff or "generated" not in eff:
+            return False
+        # Need at least 3 builtin and 2 generated samples
+        builtin_count = sum(1 for c in metrics.cycles if c.directive_source == "builtin")
+        generated_count = sum(1 for c in metrics.cycles if c.directive_source == "generated")
+        if builtin_count < 3 or generated_count < 2:
+            return False
+        return eff["generated"] > eff["builtin"] + 0.2  # need meaningful advantage
+
     def run(self, prompt: str, on_cycle=None, resume: bool = False) -> DilationResult:
         start = time.time()
         task_type = self.directives.classify_task(prompt)
@@ -147,7 +159,7 @@ class DilationController:
                         logger.warning("Detailed scoring failed, falling back to normal directive")
                         directive = self.directives.next_directive(task_type, cycle + directive_offset)
                         directive_source = "builtin"
-                elif built_in_exhausted:
+                elif built_in_exhausted or self._should_prefer_generated(metrics):
                     custom_prompt = self.directives.generate_custom_directive_prompt(
                         task_type, prompt, current_best
                     )

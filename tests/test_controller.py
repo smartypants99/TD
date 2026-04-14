@@ -145,6 +145,40 @@ def test_controller_targeted_directive_at_cycle_5():
     assert len(targeted_cycles) >= 1
 
 
+def test_should_prefer_generated_directives():
+    """Prefer generated directives when they outperform builtins."""
+    from timedilate.metrics import RunMetrics
+    config = TimeDilateConfig(dilation_factor=2, branch_factor=1)
+    mock_engine = make_mock_engine([])
+    controller = DilationController(config, mock_engine)
+
+    metrics = RunMetrics(start_time=0)
+    # 3 builtin cycles: only 1 improved (33%)
+    for i in range(3):
+        metrics.record_cycle(cycle=i+1, score=70 if i == 0 else 60, previous_score=60,
+                             directive="d", directive_source="builtin",
+                             branch_count=1, best_variant_index=0 if i == 0 else -1, elapsed_seconds=0.1)
+    # 2 generated cycles: both improved (100%)
+    for i in range(2):
+        metrics.record_cycle(cycle=4+i, score=80+i*5, previous_score=70+i*5,
+                             directive="custom", directive_source="generated",
+                             branch_count=1, best_variant_index=0, elapsed_seconds=0.1)
+
+    assert controller._should_prefer_generated(metrics) is True
+
+
+def test_should_not_prefer_generated_insufficient_data():
+    from timedilate.metrics import RunMetrics
+    config = TimeDilateConfig(dilation_factor=2, branch_factor=1)
+    mock_engine = make_mock_engine([])
+    controller = DilationController(config, mock_engine)
+    metrics = RunMetrics(start_time=0)
+    # Only 1 generated sample — not enough
+    metrics.record_cycle(cycle=1, score=80, previous_score=70, directive="d",
+                         directive_source="generated", branch_count=1, best_variant_index=0, elapsed_seconds=0.1)
+    assert controller._should_prefer_generated(metrics) is False
+
+
 def test_controller_has_metrics():
     config = TimeDilateConfig(dilation_factor=3, branch_factor=1)
     mock_engine = make_mock_engine([
