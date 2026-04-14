@@ -131,31 +131,40 @@ class ImprovementEngine:
             logger.warning("Variant generation failed: %s", e)
             return None
 
-    def _score_variant(self, original_prompt: str, variant: str, use_cot: bool = False, ensemble: bool = False) -> int:
+    def _score_variant(self, original_prompt: str, variant: str, use_cot: bool = False, ensemble: bool = False, retries: int = 1) -> int:
         """Score a variant, returning 0 on failure.
         If use_cot=True, uses chain-of-thought scoring for higher accuracy.
-        If ensemble=True, scores twice (normal + CoT) and averages."""
-        try:
-            if ensemble:
-                # Score with both methods and average
-                s1 = self._score_variant(original_prompt, variant, use_cot=False)
-                s2 = self._score_variant(original_prompt, variant, use_cot=True)
-                return (s1 + s2) // 2
-            if use_cot:
-                score_prompt = self.scorer.build_cot_scoring_prompt(original_prompt, variant)
-                raw_score = self.engine.generate(
-                    score_prompt, temperature=self.config.scoring_temperature
-                )
-                return self.scorer.parse_cot_score(raw_score)
-            else:
-                score_prompt = self.scorer.build_scoring_prompt(original_prompt, variant)
-                raw_score = self.engine.generate(
-                    score_prompt, temperature=self.config.scoring_temperature
-                )
-                return self.scorer.parse_score(raw_score)
-        except Exception as e:
-            logger.warning("Scoring failed: %s", e)
-            return 0
+        If ensemble=True, scores twice (normal + CoT) and averages.
+        Retries on failure up to `retries` times."""
+        for attempt in range(retries + 1):
+            try:
+                if ensemble:
+                    s1 = self._score_variant(original_prompt, variant, use_cot=False)
+                    s2 = self._score_variant(original_prompt, variant, use_cot=True)
+                    return (s1 + s2) // 2
+                if use_cot:
+                    score_prompt = self.scorer.build_cot_scoring_prompt(original_prompt, variant)
+                    raw_score = self.engine.generate(
+                        score_prompt, temperature=self.config.scoring_temperature
+                    )
+                    score = self.scorer.parse_cot_score(raw_score)
+                else:
+                    score_prompt = self.scorer.build_scoring_prompt(original_prompt, variant)
+                    raw_score = self.engine.generate(
+                        score_prompt, temperature=self.config.scoring_temperature
+                    )
+                    score = self.scorer.parse_score(raw_score)
+                if score == 0 and attempt < retries:
+                    logger.info("Score was 0, retrying (%d/%d)", attempt + 1, retries)
+                    continue
+                return score
+            except Exception as e:
+                if attempt < retries:
+                    logger.info("Scoring attempt %d failed: %s, retrying", attempt + 1, e)
+                    continue
+                logger.warning("Scoring failed after %d attempts: %s", attempt + 1, e)
+                return 0
+        return 0
 
     def fresh_attempt(self, original_prompt: str, directive: str) -> tuple[str | None, int]:
         """Generate a completely fresh attempt (not based on current best).

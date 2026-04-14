@@ -302,6 +302,27 @@ def test_score_feedback_in_improvement_prompt():
     assert best == "improved"
 
 
+def test_score_retry_on_zero():
+    """Scoring retries when result is 0."""
+    engine = make_mock_engine(["no score here", "75"])  # first returns 0, retry returns 75
+    config = TimeDilateConfig(branch_factor=1)
+    improver = ImprovementEngine(engine, config)
+    score = improver._score_variant("test", "variant", retries=1)
+    assert score == 75
+    assert engine.generate.call_count == 2
+
+
+def test_score_retry_on_exception():
+    """Scoring retries on exception."""
+    engine = MagicMock()
+    engine.estimate_tokens = MagicMock(return_value=100)
+    engine.generate = MagicMock(side_effect=[RuntimeError("fail"), "80"])
+    config = TimeDilateConfig(branch_factor=1)
+    improver = ImprovementEngine(engine, config)
+    score = improver._score_variant("test", "variant", retries=1)
+    assert score == 80
+
+
 def test_ensemble_scoring():
     """Ensemble scoring averages normal and CoT scores."""
     engine = make_mock_engine([
