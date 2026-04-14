@@ -63,3 +63,26 @@ def test_format_results():
         assert "sort_function" in table
         assert "1x" in table
         assert "2x" in table
+        assert "pts/s" in table
+
+
+def test_benchmark_result_efficiency_metrics():
+    from timedilate.benchmark import BenchmarkResult
+    r = BenchmarkResult(
+        prompt_name="test", dilation_factor=5, score=80, peak_score=80,
+        cycles_completed=4, elapsed_seconds=10.0, improvement_rate=0.75,
+        output_length=500, total_inference_calls=20, initial_score=50,
+    )
+    assert abs(r.points_per_second - 3.0) < 0.01  # (80-50)/10
+    assert abs(r.points_per_inference - 1.5) < 0.01  # (80-50)/20
+
+
+def test_benchmark_result_zero_elapsed():
+    from timedilate.benchmark import BenchmarkResult
+    r = BenchmarkResult(
+        prompt_name="test", dilation_factor=1, score=50, peak_score=50,
+        cycles_completed=0, elapsed_seconds=0, improvement_rate=0,
+        output_length=100, total_inference_calls=0, initial_score=50,
+    )
+    assert r.points_per_second == 0.0
+    assert r.points_per_inference == 0.0

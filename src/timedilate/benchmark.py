@@ -50,6 +50,24 @@ class BenchmarkResult:
     elapsed_seconds: float
     improvement_rate: float
     output_length: int
+    total_inference_calls: int = 0
+    initial_score: int = 0
+
+    @property
+    def points_per_second(self) -> float:
+        """Score improvement per second of compute."""
+        if self.elapsed_seconds <= 0:
+            return 0.0
+        gain = max(0, self.score - self.initial_score)
+        return gain / self.elapsed_seconds
+
+    @property
+    def points_per_inference(self) -> float:
+        """Score improvement per inference call."""
+        if self.total_inference_calls <= 0:
+            return 0.0
+        gain = max(0, self.score - self.initial_score)
+        return gain / self.total_inference_calls
 
 
 def run_benchmark(
@@ -80,6 +98,7 @@ def run_benchmark(
             result = controller.run(prompt_info["prompt"])
             elapsed = time.time() - start
 
+            initial = result.metrics.cycles[0].previous_score if result.metrics and result.metrics.cycles else 0
             bench_result = BenchmarkResult(
                 prompt_name=prompt_info["name"],
                 dilation_factor=factor,
@@ -89,6 +108,8 @@ def run_benchmark(
                 elapsed_seconds=elapsed,
                 improvement_rate=result.metrics.improvement_rate if result.metrics else 0,
                 output_length=len(result.output),
+                total_inference_calls=result.metrics.total_inference_calls if result.metrics else 0,
+                initial_score=initial,
             )
             results.append(bench_result)
 
@@ -103,6 +124,10 @@ def run_benchmark(
             "improvement_rate": round(r.improvement_rate, 3),
             "peak_score": r.peak_score,
             "output_chars": r.output_length,
+            "inference_calls": r.total_inference_calls,
+            "initial_score": r.initial_score,
+            "points_per_second": round(r.points_per_second, 3),
+            "points_per_inference": round(r.points_per_inference, 3),
         }
         for r in results
     ]
@@ -114,12 +139,13 @@ def run_benchmark(
 def format_results(results: list[BenchmarkResult]) -> str:
     """Format benchmark results as a readable table."""
     lines = [
-        f"{'Prompt':<20} {'Factor':>6} {'Score':>5} {'Peak':>5} {'Cycles':>6} {'Time':>8} {'Imp%':>5}",
-        "-" * 68,
+        f"{'Prompt':<20} {'Factor':>6} {'Score':>5} {'Peak':>5} {'Cycles':>6} {'Time':>8} {'Imp%':>5} {'pts/s':>6} {'pts/inf':>7}",
+        "-" * 88,
     ]
     for r in results:
         lines.append(
             f"{r.prompt_name:<20} {r.dilation_factor:>5}x {r.score:>5} {r.peak_score:>5} "
-            f"{r.cycles_completed:>6} {r.elapsed_seconds:>7.1f}s {r.improvement_rate:>4.0%}"
+            f"{r.cycles_completed:>6} {r.elapsed_seconds:>7.1f}s {r.improvement_rate:>4.0%} "
+            f"{r.points_per_second:>5.1f} {r.points_per_inference:>6.2f}"
         )
     return "\n".join(lines)

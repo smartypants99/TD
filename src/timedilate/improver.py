@@ -226,7 +226,7 @@ class ImprovementEngine:
             variant = self.engine.generate(prompt, temperature=temperature)
             if not variant or not variant.strip():
                 return None
-            return variant
+            return self._strip_wrapper(variant)
         except Exception as e:
             logger.warning("Reflection-based generation failed: %s", e)
             return None
@@ -419,6 +419,7 @@ class ImprovementEngine:
             output = self.engine.generate(prompt)
             if not output or not output.strip():
                 return None, 0
+            output = self._strip_wrapper(output)
             score = self._score_variant(original_prompt, output)
             return output, score
         except Exception as e:
@@ -657,7 +658,7 @@ class ImprovementEngine:
             )
             result = self.engine.generate(prompt)
             if result and result.strip():
-                return result
+                return self._strip_wrapper(result)
             return None
         except Exception as e:
             logger.warning("Crossover failed: %s", e)

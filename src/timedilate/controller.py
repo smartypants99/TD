@@ -137,6 +137,15 @@ class DilationController:
             return base + 1
         return base
 
+    def _adaptive_scoring_temperature(self, metrics: RunMetrics) -> float:
+        """Lower scoring temperature when scores are oscillating for stability."""
+        base = self.config.scoring_temperature
+        if metrics.score_oscillating:
+            return max(0.0, base - 0.1)
+        if metrics.score_variance > 100:
+            return max(0.0, base - 0.05)
+        return base
+
     def _should_prefer_generated(self, metrics: RunMetrics) -> bool:
         """After enough data, prefer generated directives if they outperform builtins."""
         eff = metrics.directive_effectiveness
@@ -283,6 +292,9 @@ class DilationController:
                     or metrics.scoring_bias != "normal"
                     or (len(metrics.cycles) >= 3 and metrics.comparative_overrule_rate > 0.3)
                 )
+                # Adaptive scoring temperature: lower when noisy
+                self.config.scoring_temperature = self._adaptive_scoring_temperature(metrics)
+
                 # Boost temperature diversity when stagnating
                 self.improver.stagnation_boost = metrics.stagnant_streak >= 2
                 self.improver.cycles_remaining = refinement_cycles - cycle - 1
