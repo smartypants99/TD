@@ -355,6 +355,26 @@ def test_validate_variant_rejects_too_short():
     assert improver._validate_variant("short", current, "test") is False
 
 
+def test_similarity_ratio():
+    config = TimeDilateConfig(branch_factor=1)
+    engine = MagicMock()
+    engine.estimate_tokens = MagicMock(return_value=100)
+    improver = ImprovementEngine(engine, config)
+    assert improver._similarity_ratio("hello", "hello") == 1.0
+    assert improver._similarity_ratio("hello", "world") < 0.5
+    assert improver._similarity_ratio("hello world", "hello earth") > 0.4
+
+
+def test_validate_variant_rejects_near_duplicate():
+    config = TimeDilateConfig(branch_factor=1)
+    engine = MagicMock()
+    engine.estimate_tokens = MagicMock(return_value=100)
+    improver = ImprovementEngine(engine, config)
+    current = "def sort(lst): return sorted(lst)"
+    # Identical is rejected
+    assert improver._validate_variant(current, current, "test") is False
+
+
 def test_validate_variant_accepts_good():
     config = TimeDilateConfig(branch_factor=1)
     engine = MagicMock()

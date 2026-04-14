@@ -116,6 +116,27 @@ class ImprovementEngine:
             logger.warning("Reflection-based generation failed: %s", e)
             return None
 
+    def _similarity_ratio(self, a: str, b: str) -> float:
+        """Quick similarity check using character overlap ratio."""
+        if not a or not b:
+            return 0.0
+        a_stripped = a.strip()
+        b_stripped = b.strip()
+        if a_stripped == b_stripped:
+            return 1.0
+        shorter = min(len(a_stripped), len(b_stripped))
+        longer = max(len(a_stripped), len(b_stripped))
+        if longer == 0:
+            return 1.0
+        # Count matching prefix + suffix as a fast approximation
+        prefix = 0
+        for i in range(min(shorter, longer)):
+            if a_stripped[i] == b_stripped[i]:
+                prefix += 1
+            else:
+                break
+        return prefix / longer
+
     def _validate_variant(self, variant: str, current_best: str, original_prompt: str) -> bool:
         """Quick validation to reject obviously bad variants without scoring."""
         if not variant or not variant.strip():
@@ -127,6 +148,10 @@ class ImprovementEngine:
         # Reject if variant is drastically shorter (< 30% of current best length)
         if len(current_best) > 50 and len(variant) < len(current_best) * 0.3:
             logger.info("Variant rejected: too short (%d vs %d chars)", len(variant), len(current_best))
+            return False
+        # Reject if nearly identical to current best (>95% similar)
+        if self._similarity_ratio(variant, current_best) > 0.95:
+            logger.info("Variant rejected: too similar to current best")
             return False
         return True
 
