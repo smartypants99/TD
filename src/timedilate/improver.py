@@ -231,6 +231,13 @@ class ImprovementEngine:
         if self._similarity_ratio(variant, current_best) > 0.95:
             logger.info("Variant rejected: too similar to current best")
             return False
+        # Reject padding-only changes: much longer but core content unchanged
+        if len(variant) > len(current_best) * 1.5 and len(current_best) > 100:
+            # Check if the original content is embedded verbatim
+            if current_best.strip() in variant:
+                logger.info("Variant rejected: original embedded with padding (%d -> %d chars)",
+                            len(current_best), len(variant))
+                return False
         return True
 
     def _generate_variant(self, original_prompt: str, current_best: str, directive: str, current_score: int, history_summary: str = "", temperature: float | None = None, score_feedback: str = "") -> str | None:
@@ -389,6 +396,7 @@ class ImprovementEngine:
         current_best = self._maybe_summarize(current_best, original_prompt)
 
         variants = []
+        rejected_count = 0
         # Reflection is most valuable for code (catches bugs before they happen)
         # so activate it earlier for code tasks
         reflection_threshold = 50 if self.task_type == "code" else 60
@@ -416,6 +424,12 @@ class ImprovementEngine:
                 )
             if variant is not None and self._validate_variant(variant, current_best, original_prompt):
                 variants.append(variant)
+            elif variant is not None:
+                rejected_count += 1
+
+        if rejected_count > 0:
+            logger.info("Rejected %d/%d variants (validation failures)",
+                        rejected_count, rejected_count + len(variants))
 
         gen_time = time.time() - cycle_start
 

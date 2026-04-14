@@ -516,6 +516,17 @@ def test_validate_variant_rejects_near_duplicate():
     assert improver._validate_variant(current, current, "test") is False
 
 
+def test_validate_variant_rejects_padding():
+    """Variant that embeds original verbatim with added padding is rejected."""
+    config = TimeDilateConfig(branch_factor=1)
+    engine = MagicMock()
+    engine.estimate_tokens = MagicMock(return_value=100)
+    improver = ImprovementEngine(engine, config)
+    original = "def sort(lst):\n    return sorted(lst)\n" + "# code " * 20  # >100 chars
+    padded = "# Header comment\n\n" + original + "\n\n# Footer padding\n" * 5
+    assert improver._validate_variant(padded, original, "test") is False
+
+
 def test_validate_variant_accepts_good():
     config = TimeDilateConfig(branch_factor=1)
     engine = MagicMock()
