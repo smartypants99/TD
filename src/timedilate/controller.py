@@ -321,6 +321,14 @@ class DilationController:
                 # Adaptive scoring temperature: lower when noisy
                 self.config.scoring_temperature = self._adaptive_scoring_temperature(metrics)
 
+                # Disable crossover if it's been attempted 3+ times without winning
+                crossover_eff = metrics.crossover_efficiency
+                if crossover_eff is not None and metrics.crossover_attempt_count >= 3 and crossover_eff == 0.0:
+                    self.improver._disable_crossover = True
+                    logger.info("Disabling crossover after %d failed attempts", metrics.crossover_attempt_count)
+                else:
+                    self.improver._disable_crossover = False
+
                 # Boost temperature diversity when stagnating
                 self.improver.stagnation_boost = metrics.stagnant_streak >= 2
                 self.improver.cycles_remaining = refinement_cycles - cycle - 1
@@ -474,6 +482,7 @@ class DilationController:
                     output_delta=output_delta,
                     output_length=len(current_best),
                     crossover_used=(best_idx == -2),
+                    crossover_attempted=getattr(self.improver, '_last_crossover_attempted', False),
                     inference_calls=est_calls,
                 )
 

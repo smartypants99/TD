@@ -543,3 +543,24 @@ def test_time_to_score_in_to_dict():
     assert "time_to_50" in d
     assert "time_to_75" in d
     assert "time_to_90" in d
+
+
+def test_crossover_efficiency():
+    m = RunMetrics(start_time=time.time())
+    # 2 crossover attempts, 1 won
+    m.record_cycle(cycle=1, score=70, previous_score=60, directive="d",
+                   directive_source="builtin", branch_count=2, best_variant_index=-2,
+                   elapsed_seconds=0.1, crossover_used=True, crossover_attempted=True)
+    m.record_cycle(cycle=2, score=75, previous_score=70, directive="d",
+                   directive_source="builtin", branch_count=2, best_variant_index=0,
+                   elapsed_seconds=0.1, crossover_attempted=True)
+    assert m.crossover_attempt_count == 2
+    assert abs(m.crossover_efficiency - 0.5) < 0.01
+
+
+def test_crossover_efficiency_none_when_no_attempts():
+    m = RunMetrics(start_time=time.time())
+    m.record_cycle(cycle=1, score=70, previous_score=60, directive="d",
+                   directive_source="builtin", branch_count=1, best_variant_index=0,
+                   elapsed_seconds=0.1)
+    assert m.crossover_efficiency is None

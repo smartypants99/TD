@@ -18,6 +18,7 @@ class CycleMetric:
     output_length: int = 0
     comparative_overruled: bool = False  # True if comparative check rejected winner
     crossover_used: bool = False  # True if crossover produced the winning variant
+    crossover_attempted: bool = False  # True if crossover was attempted this cycle
     inference_calls: int = 0  # Number of LLM calls in this cycle
 
 
@@ -304,6 +305,21 @@ class RunMetrics:
         return crossover_wins / len(improving)
 
     @property
+    def crossover_attempt_count(self) -> int:
+        """Total crossover attempts."""
+        return sum(1 for c in self.cycles if c.crossover_attempted)
+
+    @property
+    def crossover_efficiency(self) -> float | None:
+        """Fraction of crossover attempts that produced the winner.
+        None if no crossovers attempted."""
+        attempts = self.crossover_attempt_count
+        if attempts == 0:
+            return None
+        wins = sum(1 for c in self.cycles if c.crossover_used)
+        return wins / attempts
+
+    @property
     def total_inference_calls(self) -> int:
         """Total LLM inference calls across all cycles."""
         return sum(c.inference_calls for c in self.cycles)
@@ -414,6 +430,7 @@ class RunMetrics:
             "superficial_change_rate": self.superficial_change_rate,
             "comparative_overrule_rate": self.comparative_overrule_rate,
             "crossover_win_rate": self.crossover_win_rate,
+            "crossover_efficiency": self.crossover_efficiency,
             "total_inference_calls": self.total_inference_calls,
             "points_per_inference": round(self.points_per_inference, 3),
             "points_per_second": round(self.points_per_second, 3),

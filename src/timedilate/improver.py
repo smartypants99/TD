@@ -622,7 +622,9 @@ class ImprovementEngine:
         Uses CoT scoring when there are multiple variants for better discrimination.
         Attempts crossover when top 2 variants have close scores.
         When top variants are within 3 points, prefers the more different one.
-        Skips scoring remaining variants if one already beats current by a wide margin."""
+        Skips scoring remaining variants if one already beats current by a wide margin.
+        Sets self._last_crossover_attempted to track crossover usage."""
+        self._last_crossover_attempted = False
         use_cot = len(variants) > 1
         scored = []
         # Adaptive early-exit threshold: lower when many variants, higher when few
@@ -668,10 +670,14 @@ class ImprovementEngine:
 
         # Try crossover if top 2 are close (within 10 points), both beat current,
         # and the top score is worth combining (above 40 — don't crossover garbage)
-        if (len(scored) >= 2
+        # Skip crossover if it's been disabled (e.g. consistently failing)
+        skip_crossover = getattr(self, '_disable_crossover', False)
+        if (not skip_crossover
+                and len(scored) >= 2
                 and (scored[0][0] - scored[1][0]) <= 10
                 and scored[1][0] > current_score
                 and scored[0][0] >= 40):
+            self._last_crossover_attempted = True
             crossover = self._crossover(original_prompt, scored[0][2], scored[1][2],
                                          score_a=scored[0][0], score_b=scored[1][0],
                                          task_type=task_type)
