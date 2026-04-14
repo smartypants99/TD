@@ -302,6 +302,33 @@ def test_score_feedback_in_improvement_prompt():
     assert best == "improved"
 
 
+def test_validate_variant_rejects_echo():
+    """Variant that echoes the prompt is rejected."""
+    config = TimeDilateConfig(branch_factor=1)
+    engine = MagicMock()
+    engine.estimate_tokens = MagicMock(return_value=100)
+    improver = ImprovementEngine(engine, config)
+    assert improver._validate_variant("Write hello world", "print('hello')", "Write hello world") is False
+
+
+def test_validate_variant_rejects_too_short():
+    """Variant much shorter than current best is rejected."""
+    config = TimeDilateConfig(branch_factor=1)
+    engine = MagicMock()
+    engine.estimate_tokens = MagicMock(return_value=100)
+    improver = ImprovementEngine(engine, config)
+    current = "x" * 200
+    assert improver._validate_variant("short", current, "test") is False
+
+
+def test_validate_variant_accepts_good():
+    config = TimeDilateConfig(branch_factor=1)
+    engine = MagicMock()
+    engine.estimate_tokens = MagicMock(return_value=100)
+    improver = ImprovementEngine(engine, config)
+    assert improver._validate_variant("good output here", "original output", "test prompt") is True
+
+
 def test_score_retry_on_zero():
     """Scoring retries when result is 0."""
     engine = make_mock_engine(["no score here", "75"])  # first returns 0, retry returns 75

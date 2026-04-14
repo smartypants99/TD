@@ -116,6 +116,20 @@ class ImprovementEngine:
             logger.warning("Reflection-based generation failed: %s", e)
             return None
 
+    def _validate_variant(self, variant: str, current_best: str, original_prompt: str) -> bool:
+        """Quick validation to reject obviously bad variants without scoring."""
+        if not variant or not variant.strip():
+            return False
+        # Reject if variant is just the original prompt echoed back
+        if variant.strip() == original_prompt.strip():
+            logger.info("Variant rejected: echoes original prompt")
+            return False
+        # Reject if variant is drastically shorter (< 30% of current best length)
+        if len(current_best) > 50 and len(variant) < len(current_best) * 0.3:
+            logger.info("Variant rejected: too short (%d vs %d chars)", len(variant), len(current_best))
+            return False
+        return True
+
     def _generate_variant(self, original_prompt: str, current_best: str, directive: str, current_score: int, history_summary: str = "", temperature: float | None = None, score_feedback: str = "") -> str | None:
         """Generate a single variant, returning None on failure."""
         try:
@@ -209,7 +223,7 @@ class ImprovementEngine:
                 variant = self._generate_variant(
                     original_prompt, current_best, directive, current_score, history_summary, temperature=temp, score_feedback=score_feedback
                 )
-            if variant is not None:
+            if variant is not None and self._validate_variant(variant, current_best, original_prompt):
                 variants.append(variant)
 
         if not variants:
