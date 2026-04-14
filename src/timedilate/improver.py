@@ -280,39 +280,33 @@ class ImprovementEngine:
 
     def _validate_variant(self, variant: str, current_best: str, original_prompt: str) -> bool:
         """Quick validation to reject obviously bad variants without scoring."""
+        reason = self._validation_failure_reason(variant, current_best, original_prompt)
+        if reason:
+            logger.info("Variant rejected: %s", reason)
+            return False
+        return True
+
+    def _validation_failure_reason(self, variant: str, current_best: str, original_prompt: str) -> str | None:
+        """Return rejection reason or None if variant is valid."""
         if not variant or not variant.strip():
-            return False
-        # Reject if variant is just the original prompt echoed back
+            return "empty"
         if variant.strip() == original_prompt.strip():
-            logger.info("Variant rejected: echoes original prompt")
-            return False
-        # Reject if variant is drastically shorter (< 30% of current best length)
+            return "echoes original prompt"
         if len(current_best) > 50 and len(variant) < len(current_best) * 0.3:
-            logger.info("Variant rejected: too short (%d vs %d chars)", len(variant), len(current_best))
-            return False
-        # Reject if nearly identical to current best (>95% similar)
+            return f"too short ({len(variant)} vs {len(current_best)} chars)"
         if self._similarity_ratio(variant, current_best) > 0.95:
-            logger.info("Variant rejected: too similar to current best")
-            return False
-        # Reject padding-only changes: much longer but core content unchanged
+            return "too similar to current best"
         if len(variant) > len(current_best) * 1.5 and len(current_best) > 100:
-            # Check if the original content is embedded verbatim
             if current_best.strip() in variant:
-                logger.info("Variant rejected: original embedded with padding (%d -> %d chars)",
-                            len(current_best), len(variant))
-                return False
-        # Reject meta-commentary (model explaining changes instead of making them)
+                return "original embedded with padding"
         variant_lower = variant[:200].lower()
         meta_markers = ["here is the improved", "i've made the following", "changes made:",
                         "here's the updated", "i have improved", "the improved version"]
         if any(m in variant_lower for m in meta_markers):
-            logger.info("Variant rejected: contains meta-commentary instead of output")
-            return False
-        # Reject if variant starts with the original prompt (prompt echo)
+            return "contains meta-commentary instead of output"
         if len(original_prompt) > 20 and variant.strip().startswith(original_prompt[:50]):
-            logger.info("Variant rejected: starts with original prompt")
-            return False
-        return True
+            return "starts with original prompt"
+        return None
 
     def _generate_variant(self, original_prompt: str, current_best: str, directive: str, current_score: int, history_summary: str = "", temperature: float | None = None, score_feedback: str = "") -> str | None:
         """Generate a single variant, returning None on failure. Retries once with backoff."""
@@ -487,6 +481,7 @@ class ImprovementEngine:
 
         variants = []
         rejected_count = 0
+        rejection_reasons: set[str] = set()
         # Reflection is most valuable for code (catches bugs before they happen)
         # so activate it earlier for code tasks
         reflection_threshold = 50 if self.task_type == "code" else 60
@@ -516,12 +511,29 @@ class ImprovementEngine:
                 variants.append(variant)
             elif variant is not None:
                 rejected_count += 1
+                reason = self._validation_failure_reason(variant, current_best, original_prompt)
+                if reason:
+                    rejection_reasons.add(reason)
 
         if rejected_count > 0:
-            logger.info("Rejected %d/%d variants (validation failures)",
-                        rejected_count, rejected_count + len(variants))
+            logger.info("Rejected %d/%d variants (validation failures: %s)",
+                        rejected_count, rejected_count + len(variants),
+                        ", ".join(rejection_reasons))
 
         gen_time = time.time() - cycle_start
+
+        # If all variants were rejected, retry once with anti-pattern guidance
+        if not variants and rejected_count > 0 and rejection_reasons:
+            anti_hint = "CRITICAL: " + "; ".join(
+                f"Do NOT {r}" for r in rejection_reasons
+            )
+            logger.info("All variants rejected, retrying with anti-pattern hint")
+            retry_variant = self._generate_variant(
+                original_prompt, current_best, directive, current_score,
+                history_summary, score_feedback=score_feedback + "\n" + anti_hint,
+            )
+            if retry_variant and self._validate_variant(retry_variant, current_best, original_prompt):
+                variants.append(retry_variant)
 
         if not variants:
             logger.warning("All variant generations failed, keeping current best")

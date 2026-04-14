@@ -902,6 +902,37 @@ def test_format_hint_code():
     assert "markdown" in hint.lower() or "code fence" in hint.lower()
 
 
+def test_retry_on_all_variants_rejected():
+    """When all variants fail validation, retry once with anti-pattern hint."""
+    engine = make_mock_engine([
+        "Here is the improved version: bad",  # rejected: meta-commentary
+        "good clean output that differs",     # retry succeeds
+        "80",                                  # score
+    ])
+    config = TimeDilateConfig(branch_factor=1)
+    improver = ImprovementEngine(engine, config)
+    best, score, idx = improver.run_cycle(
+        original_prompt="test",
+        current_best="original content here",
+        current_score=50,
+        directive="Improve.",
+    )
+    # Should have retried and found the good variant
+    assert best == "good clean output that differs"
+    assert score == 80
+
+
+def test_validation_failure_reason():
+    config = TimeDilateConfig(branch_factor=1)
+    engine = MagicMock()
+    engine.estimate_tokens = MagicMock(return_value=100)
+    improver = ImprovementEngine(engine, config)
+    assert improver._validation_failure_reason("", "orig", "test") == "empty"
+    assert improver._validation_failure_reason("test", "orig", "test") == "echoes original prompt"
+    assert improver._validation_failure_reason("Here is the improved code", "orig", "task") == "contains meta-commentary instead of output"
+    assert improver._validation_failure_reason("good variant", "orig", "task") is None
+
+
 def test_graduated_prompt_trimming():
     """Long history should be trimmed to last 2 lines before being dropped entirely."""
     engine = make_mock_engine(["improved", "80"])
