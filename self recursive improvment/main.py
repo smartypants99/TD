@@ -22,6 +22,9 @@ def main():
     parser.add_argument("--batch-size", type=int, default=None, help="Training batch size (default: 4)")
     parser.add_argument("--num-epochs", type=int, default=None, help="Training epochs per cycle (default: 3)")
     parser.add_argument("--questions-per-domain", type=int, default=None, help="Diagnostic questions per domain (default: 200)")
+    parser.add_argument("--samples-per-weakness", type=int, default=None, help="Training samples per weakness (default: 100)")
+    parser.add_argument("--use-vllm", action="store_true", help="Use vLLM for 5-10x faster inference (pip install vllm)")
+    parser.add_argument("--gpu-memory-utilization", type=float, default=0.90, help="vLLM GPU memory fraction (default: 0.90)")
     args = parser.parse_args()
 
     # Create output dir BEFORE setting up file logging
@@ -54,8 +57,23 @@ def main():
         config.trainer.num_epochs = args.num_epochs
     if args.questions_per_domain is not None:
         config.diagnostics.questions_per_domain = args.questions_per_domain
+    if args.samples_per_weakness is not None:
+        config.generator.samples_per_weakness = args.samples_per_weakness
 
     loop = ImprovementLoop(config)
+
+    if args.use_vllm:
+        from src.utils.vllm_backend import VLLMBackend, patch_model_loader_with_vllm
+        vllm_backend = VLLMBackend(
+            model_path=args.model,
+            dtype=args.dtype,
+            max_model_len=config.model.max_seq_length,
+            gpu_memory_utilization=args.gpu_memory_utilization,
+        )
+        # Patch AFTER loop creation but BEFORE run — loop.run() calls _setup()
+        # which loads the HF model (needed for LoRA), then vLLM handles generation.
+        loop._vllm_backend = vllm_backend
+
     try:
         loop.run()
     except KeyboardInterrupt:
