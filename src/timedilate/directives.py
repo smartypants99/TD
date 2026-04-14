@@ -117,6 +117,32 @@ class DirectiveGenerator:
         }
         return aspect_directives.get(weakest_aspect, "Improve the overall quality.")
 
+    def trajectory_aware_directive(self, task_type: str, cycle_index: int,
+                                     current_score: int, score_history: list[int]) -> str:
+        """Pick directive based on score trajectory, not just current score.
+        - Rising fast: use refinement directives (don't disrupt momentum)
+        - Plateaued: use exploration/creative directives
+        - Declining: use conservative/fix directives"""
+        if len(score_history) < 2:
+            return self.next_directive(task_type, cycle_index, current_score)
+
+        recent = score_history[-3:] if len(score_history) >= 3 else score_history
+        avg_delta = (recent[-1] - recent[0]) / max(len(recent) - 1, 1)
+
+        if avg_delta >= 5:
+            # Rising fast — keep momentum with standard directives
+            return self.next_directive(task_type, cycle_index, current_score)
+        elif avg_delta <= 0:
+            # Plateaued or declining — explore with high-score or creative directives
+            directives = self.get_high_score_directives(task_type)
+            return directives[cycle_index % len(directives)]
+        else:
+            # Slow gains — mix targeted and standard
+            if cycle_index % 2 == 0:
+                return self.next_directive(task_type, cycle_index, current_score)
+            directives = self.get_high_score_directives(task_type)
+            return directives[cycle_index % len(directives)]
+
     def generate_custom_directive_prompt(
         self, task_type: str, original_prompt: str, current_output: str
     ) -> str:

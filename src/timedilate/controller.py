@@ -314,9 +314,11 @@ class DilationController:
                     directive = self.engine.generate(custom_prompt)
                     directive_source = "generated"
                 else:
-                    # Try builtin directives, skipping ones that already failed
-                    directive = self.directives.next_directive(
-                        task_type, cycle + directive_offset, current_score=current_score
+                    # Try trajectory-aware directives, skipping ones that already failed
+                    directive = self.directives.trajectory_aware_directive(
+                        task_type, cycle + directive_offset,
+                        current_score=current_score,
+                        score_history=metrics.score_history,
                     )
                     attempts = 0
                     while directive in failed_directives and attempts < 5:
