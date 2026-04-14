@@ -1,0 +1,4 @@
+torch>=2.0
+transformers>=4.30
+sympy>=1.12
+vllm>=0.8.0
