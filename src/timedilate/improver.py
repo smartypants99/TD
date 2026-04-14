@@ -19,17 +19,23 @@ class ImprovementEngine:
         directive: str,
         current_score: int = 0,
         history_summary: str = "",
+        score_feedback: str = "",
     ) -> str:
         history_block = ""
         if history_summary:
             history_block = f"Previous improvement attempts:\n{history_summary}\n\n"
+        feedback_block = ""
+        if score_feedback:
+            feedback_block = f"Evaluator feedback on current solution:\n{score_feedback}\n\n"
         return (
             f"Original task: {original_prompt}\n\n"
             f"Current solution (scored {current_score}/100):\n{current_best}\n\n"
+            f"{feedback_block}"
             f"{history_block}"
             f"Improvement directive: {directive}\n\n"
             f"Produce a meaningfully improved version. Think carefully about what "
             f"specific changes will increase the quality score. "
+            f"Address the evaluator's feedback directly. "
             f"Do NOT repeat changes that already failed to improve the score. "
             f"Output ONLY the improved solution, nothing else."
         )
@@ -60,11 +66,11 @@ class ImprovementEngine:
         t = 0.3 + (branch_index / (self.config.branch_factor - 1)) * 0.7
         return round(min(t, 1.0), 2)
 
-    def _generate_variant(self, original_prompt: str, current_best: str, directive: str, current_score: int, history_summary: str = "", temperature: float | None = None) -> str | None:
+    def _generate_variant(self, original_prompt: str, current_best: str, directive: str, current_score: int, history_summary: str = "", temperature: float | None = None, score_feedback: str = "") -> str | None:
         """Generate a single variant, returning None on failure."""
         try:
             prompt = self._build_improvement_prompt(
-                original_prompt, current_best, directive, current_score, history_summary
+                original_prompt, current_best, directive, current_score, history_summary, score_feedback
             )
             variant = self.engine.generate(prompt, temperature=temperature)
             if not variant or not variant.strip():
@@ -102,6 +108,7 @@ class ImprovementEngine:
         current_score: int,
         directive: str,
         history_summary: str = "",
+        score_feedback: str = "",
     ) -> tuple[str, int, int]:
         """Returns (best_output, best_score, best_variant_index).
         best_variant_index is -1 if no variant beat the current best."""
@@ -111,7 +118,7 @@ class ImprovementEngine:
         for i in range(self.config.branch_factor):
             temp = self._branch_temperature(i)
             variant = self._generate_variant(
-                original_prompt, current_best, directive, current_score, history_summary, temperature=temp
+                original_prompt, current_best, directive, current_score, history_summary, temperature=temp, score_feedback=score_feedback
             )
             if variant is not None:
                 variants.append(variant)

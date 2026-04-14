@@ -167,6 +167,7 @@ class DilationController:
                     current_score=current_score,
                     directive=directive,
                     history_summary=history_summary,
+                    score_feedback="",
                 )
 
                 if new_score > current_score:

@@ -221,6 +221,25 @@ def test_tournament_with_odd_number():
     assert idx == 0
 
 
+def test_score_feedback_in_improvement_prompt():
+    """Score feedback is included in the improvement prompt."""
+    engine = make_mock_engine(["improved", "88"])
+    config = TimeDilateConfig(branch_factor=1)
+    improver = ImprovementEngine(engine, config)
+    best, score, idx = improver.run_cycle(
+        original_prompt="test",
+        current_best="original",
+        current_score=50,
+        directive="Improve.",
+        score_feedback="1. Missing error handling\n2. Poor variable names",
+    )
+    # Check that the prompt included the feedback
+    call_args = engine.generate.call_args_list[0]
+    prompt_text = call_args[0][0]
+    assert "Missing error handling" in prompt_text
+    assert best == "improved"
+
+
 def test_cot_scoring_with_multi_branch():
     """Multi-branch scoring uses CoT format for better discrimination."""
     engine = make_mock_engine([

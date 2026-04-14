@@ -109,6 +109,37 @@ class Scorer:
             return max(0, min(100, int(match.group(1))))
         return self.parse_score(raw)
 
+    FEEDBACK_RUBRIC = (
+        "You are a strict evaluator. Analyze the output quality.\n\n"
+        "Criteria:\n"
+        "- Correctness: Any bugs, errors, or inaccuracies?\n"
+        "- Completeness: Does it fully address the task?\n"
+        "- Quality: Structure, readability, polish?\n"
+        "- Elegance: Clean design, efficiency?\n\n"
+        "Give 2-3 specific, actionable critiques. Be concrete.\n"
+        "Then end with: SCORE: <integer 0-100>\n\n"
+        "Example:\n"
+        "1. The sort function doesn't handle empty lists\n"
+        "2. Variable names are unclear (x, y instead of left, right)\n"
+        "SCORE: 62"
+    )
+
+    def build_feedback_scoring_prompt(self, original_prompt: str, output: str) -> str:
+        return (
+            f"Original task: {original_prompt}\n\n"
+            f"Output to evaluate:\n{output}\n\n"
+            f"{self.FEEDBACK_RUBRIC}"
+        )
+
+    def parse_feedback_score(self, raw: str) -> tuple[int, str]:
+        """Parse feedback scoring. Returns (score, feedback_text).
+        Feedback is everything before the SCORE: line."""
+        score = self.parse_cot_score(raw)
+        # Extract feedback (everything before SCORE:)
+        parts = re.split(r"SCORE:\s*\d+", raw, flags=re.IGNORECASE)
+        feedback = parts[0].strip() if parts else ""
+        return score, feedback
+
     def build_scoring_prompt(self, original_prompt: str, output: str) -> str:
         return (
             f"Original task: {original_prompt}\n\n"

@@ -114,3 +114,30 @@ def test_parse_cot_score_clamps():
     scorer = Scorer()
     assert scorer.parse_cot_score("SCORE: 150") == 100
     assert scorer.parse_cot_score("SCORE: 0") == 0
+
+
+def test_build_feedback_scoring_prompt():
+    scorer = Scorer()
+    prompt = scorer.build_feedback_scoring_prompt("test task", "test output")
+    assert "actionable" in prompt.lower()
+    assert "SCORE:" in prompt
+
+
+def test_parse_feedback_score():
+    scorer = Scorer()
+    raw = (
+        "1. Missing error handling for empty input\n"
+        "2. Variable names are unclear\n"
+        "SCORE: 58"
+    )
+    score, feedback = scorer.parse_feedback_score(raw)
+    assert score == 58
+    assert "error handling" in feedback
+    assert "SCORE" not in feedback
+
+
+def test_parse_feedback_score_no_feedback():
+    scorer = Scorer()
+    score, feedback = scorer.parse_feedback_score("SCORE: 75")
+    assert score == 75
+    assert feedback == ""
