@@ -147,6 +147,20 @@ class RunMetrics:
         }
 
     @property
+    def avg_score_delta_by_source(self) -> dict[str, float]:
+        """Average score delta per directive source. Unlike improvement_rate,
+        this captures magnitude — a source with +5 avg is better than +1 avg
+        even if both have 50% improvement rate."""
+        by_source: dict[str, list[int]] = {}
+        for c in self.cycles:
+            by_source.setdefault(c.directive_source, []).append(c.score - c.previous_score)
+        return {
+            source: sum(deltas) / len(deltas)
+            for source, deltas in by_source.items()
+            if deltas
+        }
+
+    @property
     def best_directive(self) -> str | None:
         """Return the directive text that produced the largest score jump."""
         if not self.cycles:
@@ -366,6 +380,7 @@ class RunMetrics:
             "score_inflation_rate": self.score_inflation_rate,
             "max_score_jump": self.max_score_jump,
             "directive_effectiveness": self.directive_effectiveness,
+            "avg_score_delta_by_source": {k: round(v, 2) for k, v in self.avg_score_delta_by_source.items()},
             "best_directive": self.best_directive,
             "wasted_cycles": self.wasted_cycles,
             "efficiency": self.efficiency,

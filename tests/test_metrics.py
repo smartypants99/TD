@@ -469,6 +469,29 @@ def test_time_to_score():
     assert m.time_to_score(90) is None  # never reached
 
 
+def test_avg_score_delta_by_source():
+    m = _make_metrics_with_cycles([
+        {"score": 60, "previous_score": 50, "directive_source": "builtin"},
+        {"score": 65, "previous_score": 60, "directive_source": "builtin"},
+        {"score": 75, "previous_score": 65, "directive_source": "generated"},
+        {"score": 75, "previous_score": 75, "directive_source": "generated"},
+    ])
+    deltas = m.avg_score_delta_by_source
+    assert abs(deltas["builtin"] - 7.5) < 0.01  # (10+5)/2
+    assert abs(deltas["generated"] - 5.0) < 0.01  # (10+0)/2
+
+
+def test_avg_score_delta_by_source_in_to_dict():
+    m = _make_metrics_with_cycles([
+        {"score": 60, "previous_score": 50, "directive_source": "builtin"},
+        {"score": 70, "previous_score": 60, "directive_source": "generated"},
+        {"score": 75, "previous_score": 70, "directive_source": "builtin"},
+    ])
+    d = m.to_dict()
+    assert "avg_score_delta_by_source" in d
+    assert "builtin" in d["avg_score_delta_by_source"]
+
+
 def test_time_to_score_in_to_dict():
     m = _make_metrics_with_cycles([
         {"score": 60, "previous_score": 50, "elapsed_seconds": 1.0},

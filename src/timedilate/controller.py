@@ -1,6 +1,6 @@
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from timedilate.config import TimeDilateConfig
 from timedilate.improver import ImprovementEngine
 from timedilate.scorer import Scorer
@@ -147,16 +147,21 @@ class DilationController:
         return base
 
     def _should_prefer_generated(self, metrics: RunMetrics) -> bool:
-        """After enough data, prefer generated directives if they outperform builtins."""
-        eff = metrics.directive_effectiveness
-        if "builtin" not in eff or "generated" not in eff:
-            return False
-        # Need at least 3 builtin and 2 generated samples
+        """After enough data, prefer generated directives if they outperform builtins.
+        Uses avg score delta (magnitude) as primary signal, falls back to improvement rate."""
         builtin_count = sum(1 for c in metrics.cycles if c.directive_source == "builtin")
         generated_count = sum(1 for c in metrics.cycles if c.directive_source == "generated")
         if builtin_count < 3 or generated_count < 2:
             return False
-        return eff["generated"] > eff["builtin"] + 0.2  # need meaningful advantage
+        # Prefer delta-based comparison (captures magnitude, not just win rate)
+        deltas = metrics.avg_score_delta_by_source
+        if "builtin" in deltas and "generated" in deltas:
+            return deltas["generated"] > deltas["builtin"] + 1.0
+        # Fallback to improvement rate
+        eff = metrics.directive_effectiveness
+        if "builtin" in eff and "generated" in eff:
+            return eff["generated"] > eff["builtin"] + 0.2
+        return False
 
     def run(self, prompt: str, on_cycle=None, resume: bool = False) -> DilationResult:
         start = time.time()
@@ -281,9 +286,7 @@ class DilationController:
 
                 # Adaptive branch factor
                 branch_factor = self._adaptive_branch_factor(cycle, metrics)
-                self.improver.config = TimeDilateConfig(
-                    **{**self.config.__dict__, "branch_factor": branch_factor}
-                )
+                self.improver.config = replace(self.config, branch_factor=branch_factor)
 
                 # Use ensemble scoring when scores are oscillating, biased,
                 # or comparative validation is frequently overruling selections
