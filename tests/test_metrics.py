@@ -98,6 +98,35 @@ def test_max_score_jump():
     assert m.max_score_jump == 20
 
 
+def test_directive_effectiveness():
+    m = RunMetrics(start_time=time.time())
+    m.record_cycle(cycle=1, score=80, previous_score=70, directive="fix bugs", directive_source="builtin",
+                   branch_count=1, best_variant_index=0, elapsed_seconds=0.1)
+    m.record_cycle(cycle=2, score=80, previous_score=80, directive="optimize", directive_source="builtin",
+                   branch_count=1, best_variant_index=-1, elapsed_seconds=0.1)
+    m.record_cycle(cycle=3, score=90, previous_score=80, directive="custom idea", directive_source="generated",
+                   branch_count=1, best_variant_index=0, elapsed_seconds=0.1)
+    eff = m.directive_effectiveness
+    assert eff["builtin"] == 0.5  # 1 of 2 improved
+    assert eff["generated"] == 1.0  # 1 of 1 improved
+
+
+def test_best_directive():
+    m = RunMetrics(start_time=time.time())
+    m.record_cycle(cycle=1, score=75, previous_score=70, directive="small fix", directive_source="builtin",
+                   branch_count=1, best_variant_index=0, elapsed_seconds=0.1)
+    m.record_cycle(cycle=2, score=90, previous_score=75, directive="big refactor", directive_source="generated",
+                   branch_count=1, best_variant_index=0, elapsed_seconds=0.1)
+    assert m.best_directive == "big refactor"
+
+
+def test_best_directive_no_improvement():
+    m = RunMetrics(start_time=time.time())
+    m.record_cycle(cycle=1, score=70, previous_score=70, directive="noop", directive_source="builtin",
+                   branch_count=1, best_variant_index=-1, elapsed_seconds=0.1)
+    assert m.best_directive is None
+
+
 def test_empty_metrics():
     m = RunMetrics()
     assert m.improvement_rate == 0.0

@@ -91,6 +91,31 @@ class RunMetrics:
             return 0.0
         return len(self.cycles) / total_time
 
+    @property
+    def directive_effectiveness(self) -> dict[str, float]:
+        """Track which directive sources lead to improvements.
+        Returns {source: improvement_rate}."""
+        by_source: dict[str, list[bool]] = {}
+        for c in self.cycles:
+            source = c.directive_source
+            improved = c.score > c.previous_score
+            by_source.setdefault(source, []).append(improved)
+        return {
+            source: sum(results) / len(results)
+            for source, results in by_source.items()
+            if results
+        }
+
+    @property
+    def best_directive(self) -> str | None:
+        """Return the directive text that produced the largest score jump."""
+        if not self.cycles:
+            return None
+        best = max(self.cycles, key=lambda c: c.score - c.previous_score)
+        if best.score <= best.previous_score:
+            return None
+        return best.directive
+
     def to_dict(self) -> dict:
         return {
             "prompt": self.prompt,
@@ -104,6 +129,8 @@ class RunMetrics:
             "effective_dilation": self.effective_dilation,
             "score_inflation_rate": self.score_inflation_rate,
             "max_score_jump": self.max_score_jump,
+            "directive_effectiveness": self.directive_effectiveness,
+            "best_directive": self.best_directive,
             "score_history": self.score_history,
             "elapsed_seconds": time.time() - self.start_time if self.start_time else 0,
         }
