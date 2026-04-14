@@ -8,6 +8,7 @@ from timedilate.directives import DirectiveGenerator
 from timedilate.checkpoint import CheckpointManager
 from timedilate.metrics import RunMetrics
 from timedilate.logging_config import log_cycle_summary
+from timedilate.meta import MetaLearner
 
 
 @dataclass
@@ -33,6 +34,7 @@ class DilationController:
         self.scorer = Scorer()
         self.directives = DirectiveGenerator()
         self.checkpoint = CheckpointManager(config.checkpoint_dir)
+        self.meta = MetaLearner()
 
     def _build_history_summary(self, metrics: RunMetrics, max_entries: int = 5) -> str:
         """Build a concise summary of recent cycles for the improvement prompt."""
@@ -132,6 +134,7 @@ class DilationController:
         built_in_exhausted = False
         directive_offset = 0
         built_in_count = len(self.directives.get_directives(task_type))
+        meta_directives = self.meta.best_directives(task_type, top_n=3)
         completed_cycles = resumed_from
         start_cycle = resumed_from
 
@@ -160,6 +163,10 @@ class DilationController:
                         logger.warning("Detailed scoring failed, falling back to normal directive")
                         directive = self.directives.next_directive(task_type, cycle + directive_offset)
                         directive_source = "builtin"
+                elif meta_directives and cycle < len(meta_directives):
+                    directive = meta_directives[cycle]
+                    directive_source = "meta"
+                    logger.info("Cycle %d: using meta-learned directive", cycle + 1)
                 elif built_in_exhausted or self._should_prefer_generated(metrics):
                     custom_prompt = self.directives.generate_custom_directive_prompt(
                         task_type, prompt, current_best
@@ -204,6 +211,11 @@ class DilationController:
                 log_cycle_summary(
                     logger, cycle + 1, current_score, previous_score,
                     directive_source, time.time() - cycle_start, branch_factor,
+                )
+
+                # Record directive outcome for meta-learning
+                self.meta.record_directive(
+                    task_type, directive, current_score > previous_score
                 )
 
                 if no_improvement_count >= self.config.convergence_threshold:
@@ -256,6 +268,10 @@ class DilationController:
             )
 
         self.checkpoint.cleanup()
+        try:
+            self.meta.save()
+        except Exception:
+            logger.warning("Failed to save meta-learning data")
 
         return DilationResult(
             output=current_best,
