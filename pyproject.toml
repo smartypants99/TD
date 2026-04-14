@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "timedilate"
+version = "0.1.0"
+description = "AI Time Dilation Runtime"
+requires-python = ">=3.11"
+dependencies = [
+    "vllm>=0.6.0",
+    "click>=8.0",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov",
+]
+
+[project.scripts]
+timedilate = "timedilate.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/timedilate"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

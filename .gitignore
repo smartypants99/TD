@@ -1,0 +1,5 @@
+.venv/
+.timedilate_checkpoints/
+__pycache__/
+*.pyc
+.pytest_cache/
