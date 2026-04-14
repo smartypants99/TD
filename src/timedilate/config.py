@@ -16,3 +16,4 @@ class TimeDilateConfig:
     convergence_threshold: int = 5
     context_window: int = 32768
     use_reflection: bool = False
+    score_weights: dict | None = None  # e.g. {"correctness": 40, "completeness": 20, "quality": 20, "elegance": 20}

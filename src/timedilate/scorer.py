@@ -23,6 +23,30 @@ class DetailedScore:
         }
         return min(aspects, key=aspects.get)
 
+    def weighted_total(self, weights: dict | None = None) -> int:
+        """Compute weighted total score. Weights should sum to 100.
+        Default: equal weights (25 each)."""
+        if not weights:
+            return self.total
+        w = {
+            "correctness": weights.get("correctness", 25),
+            "completeness": weights.get("completeness", 25),
+            "quality": weights.get("quality", 25),
+            "elegance": weights.get("elegance", 25),
+        }
+        total_weight = sum(w.values())
+        if total_weight == 0:
+            return self.total
+        raw = (
+            self.correctness * w["correctness"]
+            + self.completeness * w["completeness"]
+            + self.quality * w["quality"]
+            + self.elegance * w["elegance"]
+        )
+        # Normalize: each aspect is 0-25, weights sum to total_weight
+        # Max possible raw = 25 * total_weight, scale to 0-100
+        return min(100, round(raw * 100 / (25 * total_weight)))
+
     def to_dict(self) -> dict:
         return {
             "correctness": self.correctness,

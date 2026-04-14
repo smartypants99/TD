@@ -71,6 +71,26 @@ def test_detailed_score_weakest_aspect():
     assert score.weakest_aspect == "completeness"
 
 
+def test_weighted_total_default():
+    score = DetailedScore(correctness=20, completeness=18, quality=15, elegance=22)
+    assert score.weighted_total() == 75  # same as total
+
+
+def test_weighted_total_custom():
+    score = DetailedScore(correctness=25, completeness=0, quality=0, elegance=0)
+    # Weight correctness 100%, others 0%
+    result = score.weighted_total({"correctness": 100, "completeness": 0, "quality": 0, "elegance": 0})
+    assert result == 100  # 25/25 * 100%
+
+
+def test_weighted_total_heavy_correctness():
+    score = DetailedScore(correctness=20, completeness=10, quality=10, elegance=10)
+    equal = score.weighted_total()  # 50
+    heavy_c = score.weighted_total({"correctness": 60, "completeness": 20, "quality": 10, "elegance": 10})
+    # With correctness weighted higher, score should be higher since correctness is highest
+    assert heavy_c > equal
+
+
 def test_detailed_score_to_dict():
     score = DetailedScore(correctness=20, completeness=18, quality=15, elegance=22)
     d = score.to_dict()
