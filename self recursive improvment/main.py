@@ -60,34 +60,28 @@ def main():
     if args.samples_per_weakness is not None:
         config.generator.samples_per_weakness = args.samples_per_weakness
 
-    loop = ImprovementLoop(config)
-
+    # vLLM mode: use VLLMModelLoader instead of default ModelLoader
     if args.use_vllm:
-        from src.utils.vllm_backend import VLLMBackend, patch_model_loader_with_vllm
-        vllm_backend = VLLMBackend(
-            model_path=args.model,
-            dtype=args.dtype,
-            max_model_len=config.model.max_seq_length,
-            gpu_memory_utilization=args.gpu_memory_utilization,
-        )
-        # Patch AFTER loop creation but BEFORE run — loop.run() calls _setup()
-        # which loads the HF model (needed for LoRA), then vLLM handles generation.
-        loop._vllm_backend = vllm_backend
+        from src.utils.vllm_backend import VLLMModelLoader
+        config._use_vllm = True
+        config._vllm_args = {
+            "model_path": args.model,
+            "dtype": args.dtype,
+            "max_model_len": config.model.max_seq_length,
+            "gpu_memory_utilization": args.gpu_memory_utilization,
+        }
+
+    loop = ImprovementLoop(config)
 
     try:
         loop.run()
     except KeyboardInterrupt:
         logger = logging.getLogger(__name__)
         logger.info("\nInterrupted — cleaning up and saving checkpoint + report")
-        # Strip any injected LoRA layers so the model is in a clean state.
-        # If interrupted mid-training, LoRA params are partially trained —
-        # merging would corrupt the base model, so just discard them.
         try:
             loop.trainer.strip_lora()
         except Exception:
             pass
-        # Save checkpoint so resume picks up where we left off — without this,
-        # work since the last checkpoint_every boundary is lost on interrupt.
         if loop.history:
             try:
                 loop._save_checkpoint(loop.history[-1].cycle)

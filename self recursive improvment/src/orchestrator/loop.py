@@ -78,7 +78,14 @@ class ImprovementLoop:
 
     def __init__(self, config: SystemConfig):
         self.config = config
-        self.model_loader = ModelLoader(config.model)
+        self._use_vllm = getattr(config, '_use_vllm', False)
+
+        if self._use_vllm:
+            from ..utils.vllm_backend import VLLMModelLoader
+            self.model_loader = VLLMModelLoader(**config._vllm_args)
+        else:
+            self.model_loader = ModelLoader(config.model)
+
         self.diagnostics = DiagnosticsEngine(config.diagnostics, self.model_loader)
         self.generator = DataGenerator(config.generator, self.model_loader)
         self.verifier = Verifier(config.verifier)
@@ -94,7 +101,6 @@ class ImprovementLoop:
         self._pending_regression_weaknesses: list[WeaknessReport] = []  # injected into next cycle
         self._last_deescalation_cycle: int = -10  # cycle of last de-escalation (init far back)
         self._consecutive_failures = 0  # cycles that failed before training completed
-        self._vllm_backend = None  # set externally if --use-vllm
 
     def run(self):
         """Run the full improvement loop."""
@@ -158,11 +164,6 @@ class ImprovementLoop:
                 f"generator will produce samples the verifier always rejects"
             )
         self.model_loader.load()
-        # Apply vLLM backend if configured — must happen after HF model load
-        # (HF model is still needed for LoRA injection/merge/activation capture)
-        if self._vllm_backend is not None:
-            from ..utils.vllm_backend import patch_model_loader_with_vllm
-            patch_model_loader_with_vllm(self.model_loader, self._vllm_backend)
         self.config.orchestrator.output_dir.mkdir(parents=True, exist_ok=True)
         self.config.orchestrator.log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -337,11 +338,10 @@ class ImprovementLoop:
             result.post_score = result.pre_score
             return result
 
-        # 4. Train — unpatch vLLM so LoRA uses the HF model directly
+        # 4. Train — swap to HF model if using vLLM
         logger.info(f"[Cycle {cycle}] Phase 4: TRAIN on {len(verified)} verified samples")
-        if self._vllm_backend is not None:
-            from ..utils.vllm_backend import unpatch_model_loader
-            unpatch_model_loader(self.model_loader)
+        if self._use_vllm:
+            self.model_loader.swap_to_hf_for_training()
         self.trainer.inject_lora(weak_layers=diag.layer_health)
         try:
             metrics = self.trainer.train(verified, cycle)
@@ -350,9 +350,8 @@ class ImprovementLoop:
             self.trainer.strip_lora()
             self._pending_regression_weaknesses.extend(injected_regressions)
             result.post_score = result.pre_score
-            if self._vllm_backend is not None:
-                from ..utils.vllm_backend import patch_model_loader_with_vllm
-                patch_model_loader_with_vllm(self.model_loader, self._vllm_backend)
+            if self._use_vllm:
+                self.model_loader.swap_to_vllm_after_training()
             return result
         result.training_metrics = metrics
         logger.info(f"  Training done: {metrics.steps} steps, final loss: {metrics.final_loss:.4f}")
@@ -365,11 +364,19 @@ class ImprovementLoop:
             self.config.orchestrator.output_dir / "lora_weights", cycle
         )
         self.trainer.merge_lora()  # merges and strips LoRA for clean eval
-        # NOTE: Post-training eval uses HF model (not vLLM) because LoRA merge
-        # updated the HF weights but vLLM has its own stale copy. This is fine —
-        # eval is a small number of questions compared to generation.
-        # Use offset cycle number so eval generates different question variants than pre-eval
-        post_diag = self.diagnostics.run(cycle + 10000)
+
+        # Save merged model checkpoint so vLLM can reload with updated weights
+        if self._use_vllm:
+            tmp_ckpt = self.config.orchestrator.output_dir / "checkpoints" / f"cycle_{cycle}"
+            tmp_ckpt.mkdir(parents=True, exist_ok=True)
+            self.model_loader.save_checkpoint(
+                self.config.orchestrator.output_dir / "checkpoints", cycle)
+            # Eval with HF (merged weights are here), then swap to vLLM
+            post_diag = self.diagnostics.run(cycle + 10000)
+            self.model_loader.swap_to_vllm_after_training(str(tmp_ckpt))
+        else:
+            # Use offset cycle number so eval generates different question variants than pre-eval
+            post_diag = self.diagnostics.run(cycle + 10000)
         result.post_diag = post_diag  # used by _check_and_escalate for diagnosis targeting
         result.post_score = post_diag.overall_score
         result.improvement = result.post_score - result.pre_score
@@ -423,15 +430,6 @@ class ImprovementLoop:
                 ))
         if regressions:
             logger.warning(f"  REGRESSION detected in: {', '.join(regressions)}")
-
-        # Re-patch vLLM for next cycle's inference phases.
-        # vLLM still has the PRE-training weights, but for diagnosis (Phase 1)
-        # of the NEXT cycle this is acceptable — the improvement from LoRA merge
-        # is small per-cycle, and vLLM's 5-10x speed advantage outweighs the
-        # slight staleness. The model will be fully updated after the next merge.
-        if self._vllm_backend is not None:
-            from ..utils.vllm_backend import patch_model_loader_with_vllm
-            patch_model_loader_with_vllm(self.model_loader, self._vllm_backend)
 
         return result
 
