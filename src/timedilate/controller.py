@@ -225,14 +225,27 @@ class DilationController:
 
             # Score the initial output using feedback scoring to get actionable
             # weaknesses for the first improvement cycle
-            fb_prompt = self.scorer.build_feedback_scoring_prompt(prompt, current_best)
-            raw_score = self.engine.generate(
-                fb_prompt, temperature=self.config.scoring_temperature
-            )
-            current_score, initial_feedback = self.scorer.parse_feedback_score(raw_score)
-            initial_strengths, initial_weaknesses = self.scorer.parse_strengths_weaknesses(raw_score)
-            if initial_feedback:
-                logger.info("Initial assessment: score=%d, feedback=%s", current_score, initial_feedback[:100])
+            current_score = 0
+            initial_feedback = ""
+            initial_strengths = ""
+            initial_weaknesses = ""
+            try:
+                fb_prompt = self.scorer.build_feedback_scoring_prompt(prompt, current_best)
+                raw_score = self.engine.generate(
+                    fb_prompt, temperature=self.config.scoring_temperature
+                )
+                current_score, initial_feedback = self.scorer.parse_feedback_score(raw_score)
+                initial_strengths, initial_weaknesses = self.scorer.parse_strengths_weaknesses(raw_score)
+                if initial_feedback:
+                    logger.info("Initial assessment: score=%d, feedback=%s", current_score, initial_feedback[:100])
+            except Exception as e:
+                logger.warning("Initial feedback scoring failed: %s, falling back to basic scoring", e)
+                try:
+                    basic_prompt = self.scorer.build_scoring_prompt(prompt, current_best)
+                    raw = self.engine.generate(basic_prompt, temperature=self.config.scoring_temperature)
+                    current_score = self.scorer.parse_score(raw)
+                except Exception:
+                    logger.warning("Basic scoring also failed, starting with score=0")
 
         self.improver.initial_output_length = len(current_best)
 

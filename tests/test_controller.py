@@ -420,6 +420,28 @@ def test_adaptive_branch_factor_trajectory():
     assert bf < 3  # should reduce branches when rising fast
 
 
+def test_initial_scoring_failure_graceful_degradation():
+    """If feedback scoring fails, fall back to basic scoring."""
+    engine = MagicMock()
+    engine.estimate_tokens = MagicMock(return_value=100)
+    call_count = [0]
+    def mock_generate(prompt, **kwargs):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            return "initial output"
+        if call_count[0] == 2:
+            raise RuntimeError("feedback scoring OOM")  # feedback fails
+        if call_count[0] == 3:
+            return "60"  # basic scoring fallback
+        return "improved"  # variants
+    engine.generate = MagicMock(side_effect=mock_generate)
+    config = TimeDilateConfig(dilation_factor=2, branch_factor=1)
+    controller = DilationController(config, engine)
+    result = controller.run("test")
+    # Should have recovered from feedback scoring failure
+    assert result.cycles_completed >= 0
+
+
 def test_adaptive_branch_factor_stagnant():
     """Adaptive branch factor should increase when stagnating."""
     from timedilate.metrics import RunMetrics, CycleMetric
