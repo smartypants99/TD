@@ -9,13 +9,14 @@ class ImprovementEngine:
         self.scorer = Scorer()
 
     def _build_improvement_prompt(
-        self, original_prompt: str, current_best: str, directive: str
+        self, original_prompt: str, current_best: str, directive: str, current_score: int = 0
     ) -> str:
         return (
             f"Original task: {original_prompt}\n\n"
-            f"Current solution:\n{current_best}\n\n"
+            f"Current solution (scored {current_score}/100):\n{current_best}\n\n"
             f"Improvement directive: {directive}\n\n"
-            f"Produce an improved version of the solution. "
+            f"Produce a meaningfully improved version. Think carefully about what "
+            f"specific changes will increase the quality score. "
             f"Output ONLY the improved solution, nothing else."
         )
 
@@ -39,21 +40,24 @@ class ImprovementEngine:
         current_best: str,
         current_score: int,
         directive: str,
-    ) -> tuple[str, int]:
+    ) -> tuple[str, int, int]:
+        """Returns (best_output, best_score, best_variant_index).
+        best_variant_index is -1 if no variant beat the current best."""
         current_best = self._maybe_summarize(current_best, original_prompt)
 
         variants = []
         for _ in range(self.config.branch_factor):
             prompt = self._build_improvement_prompt(
-                original_prompt, current_best, directive
+                original_prompt, current_best, directive, current_score
             )
             variant = self.engine.generate(prompt)
             variants.append(variant)
 
         best_variant = current_best
         best_score = current_score
+        best_index = -1
 
-        for variant in variants:
+        for i, variant in enumerate(variants):
             score_prompt = self.scorer.build_scoring_prompt(original_prompt, variant)
             raw_score = self.engine.generate(
                 score_prompt, temperature=self.config.scoring_temperature
@@ -62,5 +66,6 @@ class ImprovementEngine:
             if score > best_score:
                 best_variant = variant
                 best_score = score
+                best_index = i
 
-        return best_variant, best_score
+        return best_variant, best_score, best_index

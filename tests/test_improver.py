@@ -17,7 +17,7 @@ def test_branch_generates_n_variants():
     ])
     config = TimeDilateConfig(branch_factor=3)
     improver = ImprovementEngine(engine, config)
-    best, score = improver.run_cycle(
+    best, score, idx = improver.run_cycle(
         original_prompt="Write hello world",
         current_best="print('hi')",
         current_score=50,
@@ -34,7 +34,7 @@ def test_keeps_current_if_no_improvement():
     ])
     config = TimeDilateConfig(branch_factor=3)
     improver = ImprovementEngine(engine, config)
-    best, score = improver.run_cycle(
+    best, score, idx = improver.run_cycle(
         original_prompt="Write hello world",
         current_best="print('hello world')",
         current_score=95,
@@ -48,7 +48,7 @@ def test_single_branch_mode():
     engine = make_mock_engine(["improved", "88"])
     config = TimeDilateConfig(branch_factor=1)
     improver = ImprovementEngine(engine, config)
-    best, score = improver.run_cycle(
+    best, score, idx = improver.run_cycle(
         original_prompt="test",
         current_best="original",
         current_score=50,

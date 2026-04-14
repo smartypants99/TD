@@ -32,6 +32,9 @@ def test_cli_help():
 def test_cli_parses_args():
     runner = CliRunner()
     with patch("timedilate.cli.run_dilation") as mock_run:
+        mock_metrics = MagicMock()
+        mock_metrics.improvement_rate = 0.8
+        mock_metrics.total_improvement = 35
         mock_run.return_value = MagicMock(
             output="result",
             score=85,
@@ -39,6 +42,7 @@ def test_cli_parses_args():
             elapsed_seconds=2.5,
             convergence_detected=False,
             interrupted=False,
+            metrics=mock_metrics,
         )
         result = runner.invoke(main, ["Write hello", "--factor", "5", "--budget", "10s"])
         assert result.exit_code == 0

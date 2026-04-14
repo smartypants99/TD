@@ -67,8 +67,9 @@ def run_dilation(prompt: str, config: TimeDilateConfig) -> DilationResult:
 @click.option("--draft-model", default="Qwen/Qwen2.5-0.5B-Instruct", help="Draft model for speculative decoding")
 @click.option("--branches", default=3, help="Branch factor per cycle")
 @click.option("--output", "output_file", default=None, help="Save output to file")
+@click.option("--metrics", "metrics_file", default=None, help="Save run metrics to JSON file")
 @click.option("--verbose", is_flag=True, help="Show detailed progress")
-def main(prompt, factor, budget, model, draft_model, branches, output_file, verbose):
+def main(prompt, factor, budget, model, draft_model, branches, output_file, metrics_file, verbose):
     """AI Time Dilation Runtime -- make AI think longer in less time."""
     budget_seconds = parse_budget(budget)
 
@@ -101,10 +102,19 @@ def main(prompt, factor, budget, model, draft_model, branches, output_file, verb
     console.print()
     console.print(result.output)
 
+    if result.metrics:
+        m = result.metrics
+        console.print(f"  Improvement rate: {m.improvement_rate:.0%}")
+        console.print(f"  Total improvement: +{m.total_improvement} points")
+
     if output_file:
         with open(output_file, "w") as f:
             f.write(result.output)
         console.print(f"\n[dim]Saved to {output_file}[/]")
+
+    if metrics_file and result.metrics:
+        result.metrics.save(metrics_file)
+        console.print(f"[dim]Metrics saved to {metrics_file}[/]")
 
 
 if __name__ == "__main__":
