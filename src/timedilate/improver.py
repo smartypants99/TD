@@ -312,12 +312,14 @@ class ImprovementEngine:
                 return current_best, current_score, -1
             winner_score = rescore
 
-        # Comparative validation for close scores
-        if (winner_score - current_score) <= 5:
+        # Comparative validation — more aggressive at high scores where
+        # self-scoring is less reliable
+        comparative_threshold = 5 if current_score < 80 else 10
+        if (winner_score - current_score) <= comparative_threshold:
             result = self._compare_outputs(original_prompt, current_best, winner_variant)
             if result == "A":
-                logger.info("Comparative check overruled selection (delta=%d)",
-                            winner_score - current_score)
+                logger.info("Comparative check overruled selection (delta=%d, threshold=%d)",
+                            winner_score - current_score, comparative_threshold)
                 return current_best, current_score, -1
 
         return winner_variant, winner_score, winner_index

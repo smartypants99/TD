@@ -161,6 +161,23 @@ def test_single_branch_no_diversity():
     assert improver._branch_temperature(0) == 0.5
 
 
+def test_comparative_wider_threshold_at_high_score():
+    """At high scores (>=80), comparative threshold widens to 10."""
+    # Score goes from 85 to 93 (delta=8, within threshold=10 at high score)
+    # Comparative says A is better → overrule
+    engine = make_mock_engine(["variant", "93", "A"])
+    config = TimeDilateConfig(branch_factor=1)
+    improver = ImprovementEngine(engine, config)
+    best, score, idx = improver.run_cycle(
+        original_prompt="test",
+        current_best="original",
+        current_score=85,
+        directive="Improve.",
+    )
+    assert best == "original"  # overruled by comparative
+    assert score == 85
+
+
 def test_no_comparative_on_large_delta():
     """When score improvement is large (>5), skip comparative check."""
     engine = make_mock_engine(["variant", "80"])  # delta=30, no comparison call
