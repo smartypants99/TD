@@ -7,6 +7,7 @@ from timedilate.scorer import Scorer
 from timedilate.directives import DirectiveGenerator
 from timedilate.checkpoint import CheckpointManager
 from timedilate.metrics import RunMetrics
+from timedilate.logging_config import log_cycle_summary
 
 
 @dataclass
@@ -198,6 +199,11 @@ class DilationController:
                     branch_count=branch_factor,
                     best_variant_index=best_idx,
                     elapsed_seconds=time.time() - cycle_start,
+                )
+
+                log_cycle_summary(
+                    logger, cycle + 1, current_score, previous_score,
+                    directive_source, time.time() - cycle_start, branch_factor,
                 )
 
                 if no_improvement_count >= self.config.convergence_threshold:
