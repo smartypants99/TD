@@ -131,10 +131,16 @@ class ImprovementEngine:
             logger.warning("Variant generation failed: %s", e)
             return None
 
-    def _score_variant(self, original_prompt: str, variant: str, use_cot: bool = False) -> int:
+    def _score_variant(self, original_prompt: str, variant: str, use_cot: bool = False, ensemble: bool = False) -> int:
         """Score a variant, returning 0 on failure.
-        If use_cot=True, uses chain-of-thought scoring for higher accuracy."""
+        If use_cot=True, uses chain-of-thought scoring for higher accuracy.
+        If ensemble=True, scores twice (normal + CoT) and averages."""
         try:
+            if ensemble:
+                # Score with both methods and average
+                s1 = self._score_variant(original_prompt, variant, use_cot=False)
+                s2 = self._score_variant(original_prompt, variant, use_cot=True)
+                return (s1 + s2) // 2
             if use_cot:
                 score_prompt = self.scorer.build_cot_scoring_prompt(original_prompt, variant)
                 raw_score = self.engine.generate(

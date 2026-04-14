@@ -302,6 +302,18 @@ def test_score_feedback_in_improvement_prompt():
     assert best == "improved"
 
 
+def test_ensemble_scoring():
+    """Ensemble scoring averages normal and CoT scores."""
+    engine = make_mock_engine([
+        "80",             # normal score
+        "SCORE: 90",      # CoT score
+    ])
+    config = TimeDilateConfig(branch_factor=1)
+    improver = ImprovementEngine(engine, config)
+    score = improver._score_variant("test", "variant", ensemble=True)
+    assert score == 85  # (80 + 90) // 2
+
+
 def test_cot_scoring_with_multi_branch():
     """Multi-branch scoring uses CoT format for better discrimination."""
     engine = make_mock_engine([
