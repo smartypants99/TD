@@ -136,6 +136,28 @@ def test_parse_cot_score_clamps():
     assert scorer.parse_cot_score("SCORE: 0") == 0
 
 
+def test_sanity_check_plausible():
+    scorer = Scorer()
+    assert scorer.sanity_check_score(75, 70, "longer output", "short") is True
+
+
+def test_sanity_check_huge_jump():
+    scorer = Scorer()
+    assert scorer.sanity_check_score(95, 50, "output", "original") is False  # +45 > 40
+
+
+def test_sanity_check_shorter_with_big_jump():
+    scorer = Scorer()
+    old = "x" * 200
+    new = "x" * 50  # much shorter
+    assert scorer.sanity_check_score(90, 60, new, old) is False
+
+
+def test_sanity_check_no_improvement():
+    scorer = Scorer()
+    assert scorer.sanity_check_score(50, 60, "any", "any") is True
+
+
 def test_progressive_scoring_harsh_at_high_score():
     scorer = Scorer()
     prompt = scorer.build_progressive_scoring_prompt("test", "output", current_score=85)

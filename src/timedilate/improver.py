@@ -303,6 +303,15 @@ class ImprovementEngine:
         if winner_score <= current_score:
             return current_best, current_score, -1
 
+        # Sanity check: flag suspicious score jumps and force re-score
+        if not self.scorer.sanity_check_score(winner_score, current_score, winner_variant, current_best):
+            logger.warning("Score sanity check failed (delta=%d), re-scoring",
+                           winner_score - current_score)
+            rescore = self._score_variant(original_prompt, winner_variant, use_cot=True)
+            if rescore <= current_score:
+                return current_best, current_score, -1
+            winner_score = rescore
+
         # Comparative validation for close scores
         if (winner_score - current_score) <= 5:
             result = self._compare_outputs(original_prompt, current_best, winner_variant)

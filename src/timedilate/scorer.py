@@ -215,6 +215,25 @@ class Scorer:
         feedback = parts[0].strip() if parts else ""
         return score, feedback
 
+    def sanity_check_score(self, new_score: int, old_score: int,
+                           new_output: str, old_output: str) -> bool:
+        """Heuristic sanity check: flag suspicious score jumps.
+        Returns True if score seems plausible, False if suspicious."""
+        delta = new_score - old_score
+        if delta <= 0:
+            return True  # no improvement, nothing to check
+
+        # Suspicious: big score jump but output got much shorter
+        if len(old_output) > 100 and len(new_output) < len(old_output) * 0.5:
+            if delta > 15:
+                return False
+
+        # Suspicious: huge jump (>40 points) in a single cycle
+        if delta > 40:
+            return False
+
+        return True
+
     def build_scoring_prompt(self, original_prompt: str, output: str) -> str:
         return (
             f"Original task: {original_prompt}\n\n"
