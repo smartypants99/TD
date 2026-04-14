@@ -322,6 +322,18 @@ def test_score_feedback_in_improvement_prompt():
     assert best == "improved"
 
 
+def test_deduplicate_variants():
+    config = TimeDilateConfig(branch_factor=1)
+    engine = MagicMock()
+    engine.estimate_tokens = MagicMock(return_value=100)
+    improver = ImprovementEngine(engine, config)
+    variants = ["hello world", "hello world", "something different"]
+    result = improver._deduplicate_variants(variants)
+    assert len(result) == 2  # one "hello world" removed
+    assert result[0][1] == "hello world"
+    assert result[1][1] == "something different"
+
+
 def test_crossover_combines_variants():
     """Crossover generates a combined output from two variants."""
     engine = make_mock_engine(["combined solution"])

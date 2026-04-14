@@ -287,6 +287,11 @@ class ImprovementEngine:
             logger.warning("All variant generations failed, keeping current best")
             return current_best, current_score, -1
 
+        # Deduplicate variants before scoring to save inference
+        if len(variants) > 1:
+            deduped = self._deduplicate_variants(variants)
+            variants = [v for _, v in deduped]
+
         # Choose selection strategy
         if len(variants) >= 4:
             winner_variant, winner_index = self._tournament_select(original_prompt, variants)
@@ -307,6 +312,22 @@ class ImprovementEngine:
                 return current_best, current_score, -1
 
         return winner_variant, winner_score, winner_index
+
+    def _deduplicate_variants(self, variants: list[str], threshold: float = 0.85) -> list[tuple[int, str]]:
+        """Remove near-duplicate variants, keeping the first of each cluster.
+        Returns list of (original_index, variant)."""
+        kept: list[tuple[int, str]] = []
+        for i, v in enumerate(variants):
+            is_dup = False
+            for _, existing in kept:
+                if self._similarity_ratio(v, existing) > threshold:
+                    is_dup = True
+                    break
+            if not is_dup:
+                kept.append((i, v))
+        if len(kept) < len(variants):
+            logger.info("Deduplicated %d -> %d unique variants", len(variants), len(kept))
+        return kept
 
     def _score_select(self, original_prompt: str, variants: list[str]) -> tuple[str, int, int]:
         """Score each variant, return (best_variant, best_index, best_score).
