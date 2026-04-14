@@ -24,6 +24,7 @@ class TimeDilateConfig:
     use_meta_learning: bool = True
     task_type_override: str | None = None  # Override auto-detection: "code", "prose", "general"
     score_weights: dict | None = None  # e.g. {"correctness": 40, "completeness": 20, "quality": 20, "elegance": 20}
+    target_score: int = 0  # Stop early when this score is reached (0 = disabled)
 
     def validate(self) -> None:
         """Validate configuration, raising ConfigError on issues."""
@@ -45,6 +46,8 @@ class TimeDilateConfig:
             valid_types = {"code", "prose", "general"}
             if self.task_type_override not in valid_types:
                 raise ConfigError(f"task_type_override must be one of {valid_types}, got '{self.task_type_override}'")
+        if not (0 <= self.target_score <= 100):
+            raise ConfigError(f"target_score must be 0-100, got {self.target_score}")
         if self.score_weights is not None:
             valid_keys = {"correctness", "completeness", "quality", "elegance"}
             invalid = set(self.score_weights.keys()) - valid_keys

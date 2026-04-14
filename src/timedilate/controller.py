@@ -468,7 +468,11 @@ class DilationController:
 
                 completed_cycles = cycle + 1
 
-                # Early exit if perfect score
+                # Early exit if target score reached
+                if self.config.target_score > 0 and current_score >= self.config.target_score:
+                    logger.info("Target score %d reached at cycle %d (score %d)",
+                                self.config.target_score, cycle + 1, current_score)
+                    break
                 if current_score >= 100:
                     logger.info("Perfect score reached at cycle %d", cycle + 1)
                     break

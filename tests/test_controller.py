@@ -347,3 +347,21 @@ def test_scoring_consistency_check_triggers_ensemble():
     assert result.metrics is not None
     # Ensemble was triggered, so force_ensemble should have been set
     assert controller.improver.force_ensemble or result.cycles_completed > 0
+
+
+def test_controller_target_score_early_stop():
+    """Stop early when target_score is reached."""
+    config = TimeDilateConfig(dilation_factor=10, branch_factor=1, target_score=80)
+    responses = [
+        "v0", "50", "50",  # initial + feedback + consistency
+        "v1", "70",        # cycle 0
+        "v2", "85",        # cycle 1 — exceeds target of 80
+        # remaining cycles would not be reached
+        "v3", "90",
+        "v4", "95",
+    ]
+    mock_engine = make_mock_engine(responses)
+    controller = DilationController(config, mock_engine)
+    result = controller.run("test")
+    assert result.score >= 80
+    assert result.cycles_completed <= 3  # should stop after hitting 85
