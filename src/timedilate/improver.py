@@ -1,4 +1,5 @@
 import logging
+import random
 import time
 
 from timedilate.config import TimeDilateConfig
@@ -752,11 +753,27 @@ class ImprovementEngine:
             return None
 
     def _compare_outputs(self, original_prompt: str, output_a: str, output_b: str) -> str:
-        """A/B compare two outputs, returns 'A', 'B', or 'TIE'."""
+        """A/B compare two outputs, returns 'A', 'B', or 'TIE'.
+        Randomly swaps positions to reduce first-position bias."""
         try:
-            prompt = self.scorer.build_comparative_prompt(original_prompt, output_a, output_b, task_type=self.task_type)
+            swapped = random.random() < 0.5
+            if swapped:
+                prompt = self.scorer.build_comparative_prompt(
+                    original_prompt, output_b, output_a, task_type=self.task_type
+                )
+            else:
+                prompt = self.scorer.build_comparative_prompt(
+                    original_prompt, output_a, output_b, task_type=self.task_type
+                )
             raw = self.engine.generate(prompt, temperature=self.config.scoring_temperature)
-            return self.scorer.parse_comparison(raw)
+            result = self.scorer.parse_comparison(raw)
+            # Unswap the result
+            if swapped:
+                if result == "A":
+                    return "B"
+                if result == "B":
+                    return "A"
+            return result
         except Exception as e:
             logger.warning("Comparison failed: %s", e)
             return "TIE"

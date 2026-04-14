@@ -389,6 +389,8 @@ class DilationController:
                         task_type, prompt, current_best,
                         failed_directives=failed_directives,
                         current_score=current_score,
+                        score_history=metrics.score_history,
+                        best_directive=metrics.best_directive,
                     )
                     directive = self.engine.generate(custom_prompt)
                     directive_source = "generated"
@@ -496,6 +498,7 @@ class DilationController:
                     improvement_rate=metrics.improvement_rate,
                     budget_used_pct=budget_pct,
                     directive_text=directive,
+                    inference_calls=est_calls,
                 )
 
                 # Record directive outcome for meta-learning

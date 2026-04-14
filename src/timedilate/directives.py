@@ -179,6 +179,8 @@ class DirectiveGenerator:
         self, task_type: str, original_prompt: str, current_output: str,
         failed_directives: set[str] | None = None,
         current_score: int = 0,
+        score_history: list[int] | None = None,
+        best_directive: str | None = None,
     ) -> str:
         failed_block = ""
         if failed_directives:
@@ -198,11 +200,26 @@ class DirectiveGenerator:
             else:
                 score_block += "It needs significant work — suggest a bold change."
 
+        # Trajectory context: help the model understand the improvement pattern
+        trajectory_block = ""
+        if score_history and len(score_history) >= 3:
+            recent = score_history[-5:]
+            trajectory_block = f"\nScore trajectory: {' -> '.join(str(s) for s in recent)}. "
+            avg_delta = (recent[-1] - recent[0]) / max(len(recent) - 1, 1)
+            if avg_delta <= 0:
+                trajectory_block += "Scores have plateaued — the output needs a fresh angle.\n"
+            elif avg_delta < 2:
+                trajectory_block += "Gains are slowing — find the remaining bottleneck.\n"
+
+        success_block = ""
+        if best_directive:
+            success_block = f"\nThe most effective past approach was: \"{best_directive}\". Build on this insight.\n"
+
         return (
             f"Given the task: {original_prompt}\n\n"
             f"And the current output:\n{current_output}\n\n"
             f"The following standard improvements have already been applied multiple times.\n"
-            f"{failed_block}{score_block}\n"
+            f"{failed_block}{score_block}{trajectory_block}{success_block}\n"
             f"Suggest ONE novel, specific improvement that would make this output meaningfully better.\n"
             f"Be creative — think of something not on this list: {', '.join(self.get_directives(task_type))}\n"
             f"Respond with just the improvement directive, one sentence, nothing else."

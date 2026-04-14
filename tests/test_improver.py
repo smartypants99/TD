@@ -123,7 +123,8 @@ def test_history_summary_in_prompt():
     assert score == 88
 
 
-def test_comparative_overrule_on_close_score():
+@patch("timedilate.improver.random.random", return_value=0.9)  # no swap
+def test_comparative_overrule_on_close_score(mock_rand):
     """When scores are close (<=5), comparative check can overrule."""
     # variant scores 53 (only 3 above current 50), comparative says A is better
     engine = make_mock_engine(["variant", "53", "A"])
@@ -186,7 +187,8 @@ def test_single_branch_no_diversity():
     assert improver._branch_temperature(0) == 0.5
 
 
-def test_comparative_wider_threshold_at_high_score():
+@patch("timedilate.improver.random.random", return_value=0.9)  # no swap
+def test_comparative_wider_threshold_at_high_score(mock_rand):
     """At high scores (>=80), comparative threshold widens to 10."""
     # Score goes from 85 to 93 (delta=8, within threshold=10 at high score)
     # Comparative says A is better → overrule
@@ -219,7 +221,8 @@ def test_no_comparative_on_large_delta():
     assert idx == 0
 
 
-def test_tournament_select_picks_winner():
+@patch("timedilate.improver.random.random", return_value=0.9)  # no swap
+def test_tournament_select_picks_winner(mock_rand):
     """Tournament selection with 4+ variants uses pairwise comparisons."""
     engine = MagicMock()
     engine.estimate_tokens = MagicMock(return_value=100)
@@ -245,7 +248,8 @@ def test_tournament_select_picks_winner():
     assert idx == 2
 
 
-def test_tournament_with_odd_number():
+@patch("timedilate.improver.random.random", return_value=0.9)  # no swap
+def test_tournament_with_odd_number(mock_rand):
     """Tournament handles odd number of variants (bye for last one)."""
     engine = MagicMock()
     engine.estimate_tokens = MagicMock(return_value=100)
@@ -1005,6 +1009,18 @@ def test_format_hint_general():
     improver = ImprovementEngine(engine, config)
     improver.task_type = "general"
     assert improver._format_hint() == ""
+
+
+@patch("timedilate.improver.random.random", return_value=0.3)  # swap positions
+def test_comparative_position_swap(mock_rand):
+    """Comparative check randomly swaps A/B positions and unswaps result."""
+    engine = make_mock_engine(["A"])  # says A is better, but positions are swapped
+    config = TimeDilateConfig(branch_factor=1)
+    improver = ImprovementEngine(engine, config)
+    # With swap: output_b is shown as A, output_a as B
+    # Model says "A" (i.e. output_b is better) → after unswap → "B"
+    result = improver._compare_outputs("test", "output_a", "output_b")
+    assert result == "B"  # swapped back
 
 
 def test_reflection_threshold_override():

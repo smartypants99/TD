@@ -155,3 +155,23 @@ def test_custom_directive_prompt_no_extras():
     )
     assert "did NOT improve" not in result
     assert "/100" not in result
+
+
+def test_custom_directive_prompt_includes_trajectory():
+    gen = DirectiveGenerator()
+    # Plateaued trajectory: avg_delta = 0
+    result = gen.generate_custom_directive_prompt(
+        "code", "Write sort", "def sort(x): return sorted(x)",
+        current_score=70, score_history=[70, 70, 70, 70, 70],
+    )
+    assert "70" in result  # trajectory shown
+    assert "plateaued" in result.lower() or "fresh angle" in result.lower()
+
+
+def test_custom_directive_prompt_includes_best_directive():
+    gen = DirectiveGenerator()
+    result = gen.generate_custom_directive_prompt(
+        "code", "Write sort", "def sort(x): return sorted(x)",
+        current_score=70, best_directive="Add error handling for edge cases",
+    )
+    assert "Add error handling for edge cases" in result
