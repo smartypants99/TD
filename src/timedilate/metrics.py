@@ -29,6 +29,13 @@ class RunMetrics:
         self.cycles.append(CycleMetric(**kwargs))
 
     @property
+    def peak_score(self) -> int:
+        """Highest score achieved at any point during the run."""
+        if not self.cycles:
+            return 0
+        return max(c.score for c in self.cycles)
+
+    @property
     def score_history(self) -> list[int]:
         return [c.score for c in self.cycles]
 
@@ -162,6 +169,7 @@ class RunMetrics:
             "dilation_factor": self.dilation_factor,
             "branch_factor": self.branch_factor,
             "total_cycles": len(self.cycles),
+            "peak_score": self.peak_score,
             "improvement_rate": self.improvement_rate,
             "total_improvement": self.total_improvement,
             "avg_cycle_time": self.avg_cycle_time,

@@ -45,6 +45,7 @@ class BenchmarkResult:
     prompt_name: str
     dilation_factor: int
     score: int
+    peak_score: int
     cycles_completed: int
     elapsed_seconds: float
     improvement_rate: float
@@ -83,6 +84,7 @@ def run_benchmark(
                 prompt_name=prompt_info["name"],
                 dilation_factor=factor,
                 score=result.score,
+                peak_score=result.metrics.peak_score if result.metrics else result.score,
                 cycles_completed=result.cycles_completed,
                 elapsed_seconds=elapsed,
                 improvement_rate=result.metrics.improvement_rate if result.metrics else 0,
@@ -99,6 +101,7 @@ def run_benchmark(
             "cycles": r.cycles_completed,
             "elapsed_s": round(r.elapsed_seconds, 2),
             "improvement_rate": round(r.improvement_rate, 3),
+            "peak_score": r.peak_score,
             "output_chars": r.output_length,
         }
         for r in results
@@ -111,12 +114,12 @@ def run_benchmark(
 def format_results(results: list[BenchmarkResult]) -> str:
     """Format benchmark results as a readable table."""
     lines = [
-        f"{'Prompt':<20} {'Factor':>6} {'Score':>5} {'Cycles':>6} {'Time':>8} {'Imp%':>5}",
-        "-" * 60,
+        f"{'Prompt':<20} {'Factor':>6} {'Score':>5} {'Peak':>5} {'Cycles':>6} {'Time':>8} {'Imp%':>5}",
+        "-" * 68,
     ]
     for r in results:
         lines.append(
-            f"{r.prompt_name:<20} {r.dilation_factor:>5}x {r.score:>5} {r.cycles_completed:>6} "
-            f"{r.elapsed_seconds:>7.1f}s {r.improvement_rate:>4.0%}"
+            f"{r.prompt_name:<20} {r.dilation_factor:>5}x {r.score:>5} {r.peak_score:>5} "
+            f"{r.cycles_completed:>6} {r.elapsed_seconds:>7.1f}s {r.improvement_rate:>4.0%}"
         )
     return "\n".join(lines)
