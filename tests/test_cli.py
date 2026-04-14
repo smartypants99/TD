@@ -42,6 +42,9 @@ def test_run_subcommand_parses_args():
         mock_metrics = MagicMock()
         mock_metrics.improvement_rate = 0.8
         mock_metrics.total_improvement = 35
+        mock_metrics.avg_cycle_time = 0.5
+        mock_metrics.score_inflation_rate = 0.5
+        mock_metrics.cycles = [MagicMock(), MagicMock(), MagicMock()]
         mock_run.return_value = MagicMock(
             output="result",
             score=85,
