@@ -456,3 +456,25 @@ def test_recommendations_in_to_dict():
     d = m.to_dict()
     assert "recommendations" in d
     assert isinstance(d["recommendations"], list)
+
+
+def test_time_to_score():
+    m = _make_metrics_with_cycles([
+        {"score": 40, "previous_score": 30, "elapsed_seconds": 2.0},
+        {"score": 60, "previous_score": 40, "elapsed_seconds": 3.0},
+        {"score": 80, "previous_score": 60, "elapsed_seconds": 4.0},
+    ])
+    assert m.time_to_score(50) == 5.0  # first 2 cycles (2+3)
+    assert m.time_to_score(80) == 9.0  # all 3 cycles
+    assert m.time_to_score(90) is None  # never reached
+
+
+def test_time_to_score_in_to_dict():
+    m = _make_metrics_with_cycles([
+        {"score": 60, "previous_score": 50, "elapsed_seconds": 1.0},
+        {"score": 80, "previous_score": 60, "elapsed_seconds": 1.0},
+    ])
+    d = m.to_dict()
+    assert "time_to_50" in d
+    assert "time_to_75" in d
+    assert "time_to_90" in d

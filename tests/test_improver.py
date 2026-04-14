@@ -553,6 +553,27 @@ def test_validate_variant_rejects_padding():
     assert improver._validate_variant(padded, original, "test") is False
 
 
+def test_validate_variant_rejects_meta_commentary():
+    """Variant with meta-commentary is rejected."""
+    config = TimeDilateConfig(branch_factor=1)
+    engine = MagicMock()
+    engine.estimate_tokens = MagicMock(return_value=100)
+    improver = ImprovementEngine(engine, config)
+    meta = "Here is the improved version:\ndef sort(lst): return sorted(lst)"
+    assert improver._validate_variant(meta, "def sort(lst): pass", "test") is False
+
+
+def test_validate_variant_rejects_prompt_echo():
+    """Variant starting with original prompt text is rejected."""
+    config = TimeDilateConfig(branch_factor=1)
+    engine = MagicMock()
+    engine.estimate_tokens = MagicMock(return_value=100)
+    improver = ImprovementEngine(engine, config)
+    prompt = "Write a Python function that sorts a list of integers"
+    echo = prompt + "\n\ndef sort(lst): return sorted(lst)"
+    assert improver._validate_variant(echo, "def sort(lst): pass", prompt) is False
+
+
 def test_validate_variant_accepts_good():
     config = TimeDilateConfig(branch_factor=1)
     engine = MagicMock()

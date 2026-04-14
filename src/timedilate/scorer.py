@@ -191,6 +191,17 @@ class Scorer:
             return max(0, min(100, int(match.group(1))))
         return self.parse_score(raw)
 
+    def parse_cot_subscores(self, raw: str) -> dict[str, int]:
+        """Extract sub-scores from CoT reasoning (e.g., 'Correctness: 20/25').
+        Returns {aspect: score} dict, empty if none found."""
+        subscores = {}
+        for aspect in ("correctness", "completeness", "quality", "elegance"):
+            pattern = rf"{aspect}\s*[:=]\s*(\d+)\s*(?:/\s*25)?"
+            match = re.search(pattern, raw, re.IGNORECASE)
+            if match:
+                subscores[aspect] = max(0, min(25, int(match.group(1))))
+        return subscores
+
     FEEDBACK_RUBRIC = (
         "You are a strict evaluator. Analyze the output quality.\n\n"
         "Criteria:\n"

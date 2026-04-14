@@ -281,6 +281,17 @@ class ImprovementEngine:
                 logger.info("Variant rejected: original embedded with padding (%d -> %d chars)",
                             len(current_best), len(variant))
                 return False
+        # Reject meta-commentary (model explaining changes instead of making them)
+        variant_lower = variant[:200].lower()
+        meta_markers = ["here is the improved", "i've made the following", "changes made:",
+                        "here's the updated", "i have improved", "the improved version"]
+        if any(m in variant_lower for m in meta_markers):
+            logger.info("Variant rejected: contains meta-commentary instead of output")
+            return False
+        # Reject if variant starts with the original prompt (prompt echo)
+        if len(original_prompt) > 20 and variant.strip().startswith(original_prompt[:50]):
+            logger.info("Variant rejected: starts with original prompt")
+            return False
         return True
 
     def _generate_variant(self, original_prompt: str, current_best: str, directive: str, current_score: int, history_summary: str = "", temperature: float | None = None, score_feedback: str = "") -> str | None:
@@ -333,6 +344,9 @@ class ImprovementEngine:
                         score_prompt, temperature=self.config.scoring_temperature
                     )
                     score = self.scorer.parse_cot_score(raw_score)
+                    subscores = self.scorer.parse_cot_subscores(raw_score)
+                    if subscores:
+                        logger.debug("CoT subscores: %s -> total %d", subscores, score)
                 elif self.config.score_weights:
                     # Use detailed scoring with custom weights
                     score_prompt = self.scorer.build_detailed_scoring_prompt(original_prompt, variant)

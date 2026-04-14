@@ -307,6 +307,15 @@ class RunMetrics:
             return 0.0
         return max(0, self.total_improvement) / total_calls
 
+    def time_to_score(self, target: int) -> float | None:
+        """Seconds elapsed before reaching target score. None if never reached."""
+        cumulative = 0.0
+        for c in self.cycles:
+            cumulative += c.elapsed_seconds
+            if c.score >= target:
+                return round(cumulative, 2)
+        return None
+
     @property
     def diminishing_returns(self) -> bool:
         """True if last 3+ cycles averaged < 1 point improvement."""
@@ -370,6 +379,9 @@ class RunMetrics:
             "score_ceiling": self.score_ceiling,
             "score_history": self.score_history,
             "elapsed_seconds": time.time() - self.start_time if self.start_time else 0,
+            "time_to_50": self.time_to_score(50),
+            "time_to_75": self.time_to_score(75),
+            "time_to_90": self.time_to_score(90),
             "recommendations": self.recommendations,
         }
 

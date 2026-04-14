@@ -32,6 +32,29 @@ def test_parse_score_invalid():
     assert scorer.parse_score("") == 0
 
 
+def test_parse_cot_subscores():
+    scorer = Scorer()
+    raw = "Correctness: 20/25\nCompleteness: 18/25\nQuality: 15/25\nElegance: 22/25\nSCORE: 75"
+    subs = scorer.parse_cot_subscores(raw)
+    assert subs["correctness"] == 20
+    assert subs["completeness"] == 18
+    assert subs["quality"] == 15
+    assert subs["elegance"] == 22
+
+
+def test_parse_cot_subscores_partial():
+    scorer = Scorer()
+    raw = "Correctness = 20. The code is good. SCORE: 70"
+    subs = scorer.parse_cot_subscores(raw)
+    assert subs["correctness"] == 20
+    assert "completeness" not in subs
+
+
+def test_parse_cot_subscores_empty():
+    scorer = Scorer()
+    assert scorer.parse_cot_subscores("just a number 75") == {}
+
+
 def test_parse_score_clamps():
     scorer = Scorer()
     assert scorer.parse_score("150") == 100
