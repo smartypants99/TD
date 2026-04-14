@@ -15,8 +15,8 @@ class ConfigError(ValueError):
 @dataclass
 class TimeDilateConfig:
     # Core
-    model: str = "Qwen/Qwen2.5-7B-Instruct"
-    draft_model: str = "Qwen/Qwen2.5-0.5B-Instruct"
+    model: str = "Qwen/Qwen3-8B"
+    draft_model: str = "Qwen/Qwen3-8B"
     dilation_factor: float = 1.0  # 1.0 = single pass, 1000 = 1000x more thinking
 
     # Hardware
