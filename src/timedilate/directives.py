@@ -59,6 +59,26 @@ HIGH_SCORE_GENERAL_DIRECTIVES = [
     "Improve the opening to immediately engage the reader.",
 ]
 
+LOW_SCORE_CODE_DIRECTIVES = [
+    "The code likely doesn't run. Fix all syntax errors and make it execute correctly.",
+    "Start with the core algorithm — get the basic case working before handling edge cases.",
+    "The function signature or return value is probably wrong. Verify the contract.",
+    "Rewrite the most broken function from scratch with a clearer approach.",
+]
+
+LOW_SCORE_PROSE_DIRECTIVES = [
+    "The writing lacks a clear thesis. State the main argument in one sentence, then build from there.",
+    "The structure is confusing. Reorganize into: introduction, main points, conclusion.",
+    "Add specific evidence or examples — the current claims are unsupported.",
+    "The tone is inconsistent. Pick one voice and rewrite for coherence.",
+]
+
+LOW_SCORE_GENERAL_DIRECTIVES = [
+    "The output misses the core requirement. Re-read the task and address it directly.",
+    "Start over with a clearer structure: what is the goal, what are the steps, what is the result.",
+    "The output is too vague. Add specific, concrete details throughout.",
+]
+
 TASK_KEYWORDS = {
     "code": [
         "function", "code", "program", "script", "implement", "build",
@@ -93,6 +113,13 @@ class DirectiveGenerator:
             return PROSE_DIRECTIVES
         return GENERAL_DIRECTIVES
 
+    def get_low_score_directives(self, task_type: str) -> list[str]:
+        if task_type == "code":
+            return LOW_SCORE_CODE_DIRECTIVES
+        if task_type == "prose":
+            return LOW_SCORE_PROSE_DIRECTIVES
+        return LOW_SCORE_GENERAL_DIRECTIVES
+
     def get_high_score_directives(self, task_type: str) -> list[str]:
         if task_type == "code":
             return HIGH_SCORE_CODE_DIRECTIVES
@@ -100,11 +127,16 @@ class DirectiveGenerator:
             return HIGH_SCORE_PROSE_DIRECTIVES
         return HIGH_SCORE_GENERAL_DIRECTIVES
 
+    def get_directives_for_score(self, task_type: str, score: int) -> list[str]:
+        """Return the appropriate directive list for a given score range."""
+        if score < 40:
+            return self.get_low_score_directives(task_type)
+        if score >= 70:
+            return self.get_high_score_directives(task_type)
+        return self.get_directives(task_type)
+
     def next_directive(self, task_type: str, cycle_index: int, current_score: int = 0) -> str:
-        if current_score >= 70:
-            directives = self.get_high_score_directives(task_type)
-        else:
-            directives = self.get_directives(task_type)
+        directives = self.get_directives_for_score(task_type, current_score)
         return directives[cycle_index % len(directives)]
 
     def directive_for_weakness(self, weakest_aspect: str) -> str:

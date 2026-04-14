@@ -443,6 +443,7 @@ class DilationController:
                     peak_score=metrics.peak_score,
                     improvement_rate=metrics.improvement_rate,
                     budget_used_pct=budget_pct,
+                    directive_text=directive,
                 )
 
                 # Record directive outcome for meta-learning

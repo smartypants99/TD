@@ -41,7 +41,8 @@ def log_cycle_summary(logger: logging.Logger, cycle: int, score: int, previous_s
                       directive_source: str, elapsed: float, branch_count: int,
                       output_delta: float = 0.0, peak_score: int = 0,
                       improvement_rate: float = 0.0,
-                      budget_used_pct: float = 0.0) -> None:
+                      budget_used_pct: float = 0.0,
+                      directive_text: str = "") -> None:
     """Emit a structured cycle summary log with rich per-cycle data."""
     delta = score - previous_score
     data = {
@@ -55,6 +56,7 @@ def log_cycle_summary(logger: logging.Logger, cycle: int, score: int, previous_s
         "peak_score": peak_score,
         "cumulative_improvement_rate": round(improvement_rate, 3),
         "budget_used_pct": round(budget_used_pct, 1),
+        "directive": directive_text[:80] if directive_text else "",
     }
     budget_str = f" budget={budget_used_pct:.0f}%" if budget_used_pct > 0 else ""
     msg = (

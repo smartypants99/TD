@@ -85,10 +85,17 @@ def test_high_score_prose_directives():
     assert len(directives) >= 5
 
 
-def test_low_score_uses_standard_directives():
+def test_low_score_uses_low_score_directives():
+    gen = DirectiveGenerator()
+    low = gen.get_low_score_directives("code")
+    d = gen.next_directive("code", 0, current_score=30)
+    assert d == low[0]
+
+
+def test_mid_score_uses_standard_directives():
     gen = DirectiveGenerator()
     standard = gen.get_directives("code")
-    d = gen.next_directive("code", 0, current_score=30)
+    d = gen.next_directive("code", 0, current_score=50)
     assert d == standard[0]
 
 
