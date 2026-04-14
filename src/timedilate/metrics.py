@@ -286,6 +286,28 @@ class RunMetrics:
         return sum(c.inference_calls for c in self.cycles)
 
     @property
+    def score_ceiling(self) -> int | None:
+        """Detect a scoring ceiling — if last 3+ cycles all hit the same max
+        but never exceed it, return that ceiling value. None if no ceiling."""
+        if len(self.cycles) < 3:
+            return None
+        recent_scores = [c.score for c in self.cycles[-3:]]
+        peak = max(recent_scores)
+        # All recent cycles hit the same peak (within 2 points)
+        if all(abs(s - peak) <= 2 for s in recent_scores):
+            return peak
+        return None
+
+    @property
+    def points_per_inference(self) -> float:
+        """Score improvement per inference call — measures cost-effectiveness.
+        Lower values suggest diminishing returns on compute spend."""
+        total_calls = self.total_inference_calls
+        if total_calls == 0:
+            return 0.0
+        return max(0, self.total_improvement) / total_calls
+
+    @property
     def diminishing_returns(self) -> bool:
         """True if last 3+ cycles averaged < 1 point improvement."""
         if len(self.cycles) < 3:
@@ -317,6 +339,8 @@ class RunMetrics:
             "comparative_overrule_rate": self.comparative_overrule_rate,
             "crossover_win_rate": self.crossover_win_rate,
             "total_inference_calls": self.total_inference_calls,
+            "points_per_inference": round(self.points_per_inference, 3),
+            "score_ceiling": self.score_ceiling,
             "score_history": self.score_history,
             "elapsed_seconds": time.time() - self.start_time if self.start_time else 0,
         }
@@ -335,6 +359,8 @@ class RunMetrics:
         ]
         if self.best_directive:
             lines.append(f"Best directive: {self.best_directive}")
+        if self.score_ceiling is not None:
+            lines.append(f"Warning: score ceiling detected at {self.score_ceiling}")
         if self.diminishing_returns:
             lines.append("Warning: diminishing returns detected")
         if self.superficial_change_rate > 0.5 and len(self.cycles) >= 3:

@@ -413,6 +413,22 @@ class DilationController:
                         task_type, directive, current_score > previous_score
                     )
 
+                # Score ceiling detection — try fresh attempt to break through
+                if (metrics.score_ceiling is not None
+                        and no_improvement_count >= 2
+                        and not convergence_detected):
+                    logger.info("Score ceiling at %d, attempting breakthrough", metrics.score_ceiling)
+                    fresh_output, fresh_score = self.improver.fresh_attempt(
+                        prompt, "Take a completely different approach to break past the current quality ceiling.",
+                        best_directive=metrics.best_directive,
+                        score_history=metrics.score_history,
+                    )
+                    if fresh_output and fresh_score > current_score:
+                        logger.info("Ceiling breakthrough: %d -> %d", current_score, fresh_score)
+                        current_best = fresh_output
+                        current_score = fresh_score
+                        no_improvement_count = 0
+
                 if no_improvement_count >= self._effective_convergence_threshold(current_score):
                     convergence_detected = True
                     # Try a fresh attempt to break out of plateau

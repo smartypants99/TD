@@ -359,3 +359,34 @@ def test_crossover_win_rate():
                    directive_source="builtin", branch_count=2, best_variant_index=0,
                    elapsed_seconds=0.1)
     assert abs(m.crossover_win_rate - 0.5) < 0.01
+
+
+def test_score_ceiling_detected():
+    m = RunMetrics(start_time=time.time())
+    # 3 cycles all at score 85
+    for i in range(3):
+        m.record_cycle(cycle=i+1, score=85, previous_score=85,
+                       directive="d", directive_source="builtin",
+                       branch_count=1, best_variant_index=-1, elapsed_seconds=0.1)
+    assert m.score_ceiling == 85
+
+
+def test_score_ceiling_not_detected_when_rising():
+    m = RunMetrics(start_time=time.time())
+    for i, score in enumerate([70, 80, 90]):
+        m.record_cycle(cycle=i+1, score=score, previous_score=score-10,
+                       directive="d", directive_source="builtin",
+                       branch_count=1, best_variant_index=0, elapsed_seconds=0.1)
+    assert m.score_ceiling is None
+
+
+def test_points_per_inference():
+    m = RunMetrics(start_time=time.time())
+    m.record_cycle(cycle=1, score=70, previous_score=50, directive="d",
+                   directive_source="builtin", branch_count=2, best_variant_index=0,
+                   elapsed_seconds=0.1, inference_calls=4)
+    m.record_cycle(cycle=2, score=80, previous_score=70, directive="d",
+                   directive_source="builtin", branch_count=2, best_variant_index=0,
+                   elapsed_seconds=0.1, inference_calls=4)
+    # total_improvement=30, total_inference_calls=8
+    assert abs(m.points_per_inference - 3.75) < 0.01

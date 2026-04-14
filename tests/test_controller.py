@@ -142,6 +142,9 @@ def test_controller_targeted_directive_at_cycle_5():
     # Cycle 6: feedback scoring (6%3==0, 6%5!=0) + normal cycle
     responses.append("STRENGTHS:\n- Good\nWEAKNESSES:\n1. Minor\nSCORE: 95")
     responses.extend(["v6", "97"])
+    # Padding for ceiling checks, generated directives, fresh attempts
+    for _ in range(10):
+        responses.extend(["extra", "90", "fallback", "85"])
     mock_engine = make_mock_engine(responses)
     controller = DilationController(config, mock_engine)
     result = controller.run("test")
