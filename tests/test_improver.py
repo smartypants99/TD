@@ -846,3 +846,45 @@ def test_fallback_scoring_on_exception():
     improver = ImprovementEngine(engine, config)
     score = improver._score_variant("test", "output", retries=1)
     assert score == 60
+
+
+def test_strip_wrapper_code_fences():
+    """Code fences should be stripped for code task type."""
+    engine = MagicMock()
+    engine.estimate_tokens = MagicMock(return_value=100)
+    config = TimeDilateConfig(branch_factor=1)
+    improver = ImprovementEngine(engine, config)
+    improver.task_type = "code"
+    result = improver._strip_wrapper("```python\ndef hello():\n    pass\n```")
+    assert result == "def hello():\n    pass"
+    # Non-fenced code passes through
+    assert improver._strip_wrapper("def hello(): pass") == "def hello(): pass"
+
+
+def test_strip_wrapper_prose_passthrough():
+    """Prose should pass through without stripping."""
+    engine = MagicMock()
+    engine.estimate_tokens = MagicMock(return_value=100)
+    config = TimeDilateConfig(branch_factor=1)
+    improver = ImprovementEngine(engine, config)
+    improver.task_type = "prose"
+    assert improver._strip_wrapper("Some prose text.") == "Some prose text."
+
+
+def test_format_hint_code():
+    engine = MagicMock()
+    engine.estimate_tokens = MagicMock(return_value=100)
+    config = TimeDilateConfig(branch_factor=1)
+    improver = ImprovementEngine(engine, config)
+    improver.task_type = "code"
+    hint = improver._format_hint()
+    assert "markdown" in hint.lower() or "code fence" in hint.lower()
+
+
+def test_format_hint_general():
+    engine = MagicMock()
+    engine.estimate_tokens = MagicMock(return_value=100)
+    config = TimeDilateConfig(branch_factor=1)
+    improver = ImprovementEngine(engine, config)
+    improver.task_type = "general"
+    assert improver._format_hint() == ""

@@ -53,6 +53,20 @@ class ImprovementEngine:
             if total_est > prompt_budget:
                 feedback_block = ""
 
+        # Score context: tell the model what the score means on the rubric
+        score_context = ""
+        if current_score > 0:
+            if current_score >= 91:
+                score_context = f"(Rating: exceptional — only polish-level fixes remain)\n"
+            elif current_score >= 81:
+                score_context = f"(Rating: very good — only nitpicks remain)\n"
+            elif current_score >= 61:
+                score_context = f"(Rating: good with minor issues)\n"
+            elif current_score >= 41:
+                score_context = f"(Rating: acceptable but significant room for improvement)\n"
+            else:
+                score_context = f"(Rating: major issues present)\n"
+
         # Score-aware generation guidance
         if current_score >= 85:
             guidance = (
@@ -82,7 +96,7 @@ class ImprovementEngine:
 
         return (
             f"Original task: {original_prompt}\n\n"
-            f"Current solution (scored {current_score}/100):\n{current_best}\n\n"
+            f"Current solution (scored {current_score}/100):\n{score_context}{current_best}\n\n"
             f"{feedback_block}"
             f"{history_block}"
             f"{urgency}"
@@ -90,7 +104,30 @@ class ImprovementEngine:
             f"{guidance} "
             f"Do NOT repeat changes that already failed to improve the score. "
             f"Output ONLY the improved solution, nothing else."
+            f"{self._format_hint()}"
         )
+
+    def _strip_wrapper(self, text: str) -> str:
+        """Strip markdown code fences and common wrapper patterns models add."""
+        stripped = text.strip()
+        if self.task_type == "code":
+            # Strip ```python ... ``` or ``` ... ```
+            import re
+            match = re.match(r'^```\w*\n(.*?)```\s*$', stripped, re.DOTALL)
+            if match:
+                return match.group(1).strip()
+        return stripped
+
+    def _format_hint(self) -> str:
+        """Return a format hint to prevent models from wrapping output."""
+        if self.task_type == "code":
+            return (
+                "\nDo NOT wrap in markdown code fences (```). "
+                "Do NOT add explanations before or after the code."
+            )
+        if self.task_type == "prose":
+            return "\nDo NOT add meta-commentary about changes made."
+        return ""
 
     def _maybe_summarize(self, text: str, original_prompt: str) -> str:
         """If text exceeds 75% of context window, ask model to summarize."""
@@ -257,7 +294,7 @@ class ImprovementEngine:
                 if not variant or not variant.strip():
                     logger.warning("Empty variant generated, skipping")
                     return None
-                return variant
+                return self._strip_wrapper(variant)
             except Exception as e:
                 if attempt == 0:
                     logger.info("Variant generation failed: %s, retrying in 0.5s", e)
