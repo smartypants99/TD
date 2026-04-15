@@ -69,6 +69,7 @@ class DilationEngine:
         self._last_token_counts: list[int] = []
         self._last_input_token_counts: list[int] = []
         self._last_usage: dict = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+        self._last_health_status: str | None = None
         self._last_health_status: str = "unknown"
 
     def _build_llm_kwargs(self, gpu_util: float) -> dict:
@@ -277,6 +278,11 @@ class DilationEngine:
             retries=retries, stop=stop,
         )
         return result if isinstance(result, list) else [result]
+
+    @property
+    def last_health_error_was_oom(self) -> bool:
+        """True if the most recent health_check() failed due to OOM."""
+        return self._last_health_status == "oom"
 
     @property
     def last_token_counts(self) -> list[int]:
