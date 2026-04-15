@@ -50,7 +50,8 @@ def test_oom_fallback_utils_constant():
 def test_looks_like_oom_recognizer():
     assert _looks_like_oom(RuntimeError("CUDA out of memory"))
     assert _looks_like_oom(RuntimeError("cuda oom"))
-    assert _looks_like_oom(RuntimeError("No Memory available"))
+    assert _looks_like_oom(RuntimeError("no available memory"))
+    assert _looks_like_oom(RuntimeError("Cannot allocate tensor of size X"))
     assert not _looks_like_oom(RuntimeError("network error"))
     # class-name based recognition
     class OutOfMemoryError(Exception):
