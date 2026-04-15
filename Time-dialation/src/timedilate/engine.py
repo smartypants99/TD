@@ -41,6 +41,8 @@ class DilationEngine:
         self._model = None
         self._initialized = False
         self._effective_gpu_util: float | None = None
+        self._total_output_tokens = 0
+        self._last_token_counts: list[int] = []
 
     def _build_llm_kwargs(self, gpu_util: float) -> dict:
         kwargs = dict(
@@ -152,6 +154,16 @@ class DilationEngine:
                 elapsed = time.time() - start
 
                 texts = [o.outputs[0].text for o in outputs]
+                token_counts: list[int] = []
+                for o in outputs:
+                    out0 = o.outputs[0]
+                    tids = getattr(out0, "token_ids", None)
+                    try:
+                        token_counts.append(len(tids) if tids is not None else 0)
+                    except TypeError:
+                        token_counts.append(0)
+                self._last_token_counts = token_counts
+                self._total_output_tokens += sum(token_counts)
 
                 self._total_calls += len(texts)
                 self._total_latency += elapsed
