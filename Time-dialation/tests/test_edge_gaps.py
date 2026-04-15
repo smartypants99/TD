@@ -596,3 +596,30 @@ def test_time_budget_lookahead_skipped_when_history_empty():
     # Early stop wins before any cycle → no lookahead needed, no crash
     assert result.score == 99
     assert result.cycles_completed == 0
+
+
+# --- End-to-end tiebreak integration ---
+
+def test_tiebreak_triggers_when_top_scores_tie_and_picks_judged_winner():
+    """run() must invoke the pairwise judge when ≥2 branches share top score,
+    and the judge's letter-reply must map to the adopted output."""
+    responses = [
+        "initial", "60",
+        "critique",
+        "branch_a", "85",
+        "branch_b", "85",
+        "branch_c", "85",
+        "B",
+    ]
+    engine = MagicMock()
+    engine.generate = MagicMock(side_effect=responses)
+    config = TimeDilateConfig(
+        dilation_factor=1.5, branch_factor=3,
+        branch_temperature_spread=0.0, convergence_patience=10,
+    )
+    controller = DilationController(config, engine)
+    result = controller.run("test")
+    assert controller._tiebreaks_run >= 1
+    assert result.output == "branch_b"
+    assert result.score == 85
+    assert result.to_report()["tiebreaks_run"] >= 1
