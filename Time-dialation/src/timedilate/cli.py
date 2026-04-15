@@ -78,6 +78,8 @@ def main(ctx):
               help="Model weights dtype.")
 @click.option("--enforce-eager", is_flag=True, default=False,
               help="Skip CUDA graph capture (saves VRAM; slower).")
+@click.option("--swap-space", "swap_space", default=None, type=float,
+              help="CPU swap space for KV cache overflow (GiB).")
 # Sampling
 @click.option("--temperature", default=None, type=float, help="Sampling temperature (0.0-2.0).")
 @click.option("--seed", default=None, type=int, help="RNG seed for deterministic sampling.")
@@ -101,7 +103,7 @@ def main(ctx):
 @click.option("--verbose", is_flag=True, help="Detailed logging.")
 @click.option("--dry-run", is_flag=True, help="Show resolved config and exit.")
 def run(prompt, factor, model, time_budget, max_tokens,
-        gpu_mem_util, max_model_len, dtype, enforce_eager,
+        gpu_mem_util, max_model_len, dtype, enforce_eager, swap_space,
         temperature, seed,
         branch_factor, patience, early_stop, no_critique, no_cot,
         output_file, report, stream_progress, quiet, verbose, dry_run):
@@ -130,6 +132,8 @@ def run(prompt, factor, model, time_budget, max_tokens,
         kwargs["dtype"] = dtype
     if enforce_eager:
         kwargs["enforce_eager"] = True
+    if swap_space is not None:
+        kwargs["swap_space_gb"] = swap_space
     if temperature is not None:
         kwargs["temperature"] = temperature
     if seed is not None:
