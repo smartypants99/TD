@@ -192,6 +192,26 @@ class DilationEngine:
                     continue
         raise InferenceError(f"Inference failed after {retries + 1} attempts: {last_error}")
 
+    def generate_batch(
+        self,
+        prompts: Sequence[str],
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        retries: int = 2,
+        stop: Sequence[str] | None = None,
+    ) -> list[str]:
+        """Explicit batched generation — always returns list[str]."""
+        result = self.generate(
+            list(prompts), max_tokens=max_tokens, temperature=temperature,
+            retries=retries, stop=stop,
+        )
+        return result if isinstance(result, list) else [result]
+
+    @property
+    def last_token_counts(self) -> list[int]:
+        """Output token counts from the most recent generate() call (per prompt)."""
+        return list(self._last_token_counts)
+
     @property
     def stats(self) -> dict:
         return {
@@ -200,4 +220,5 @@ class DilationEngine:
             "total_latency_s": round(self._total_latency, 3),
             "oom_retries": self._oom_retries,
             "effective_gpu_util": self._effective_gpu_util,
+            "total_output_tokens": self._total_output_tokens,
         }
