@@ -127,12 +127,16 @@ def test_score_clamps_above_100():
     assert s == 100
 
 
-def test_score_engine_exception_defaults_to_50():
+def test_score_engine_exception_propagates():
+    """Engine errors must propagate so callers can degrade explicitly —
+    silently defaulting to 50 masked real inference failures."""
+    import pytest
     engine = MagicMock()
     engine.generate = MagicMock(side_effect=RuntimeError("inference broke"))
     config = TimeDilateConfig()
     controller = DilationController(config, engine)
-    assert controller._score("p", "o") == 50
+    with pytest.raises(RuntimeError, match="inference broke"):
+        controller._score("p", "o")
 
 
 # --- Early stop ---
