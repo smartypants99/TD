@@ -165,6 +165,15 @@ class DilationController:
         self._tiebreaks_run = 0
         self._early_rejections = 0
 
+    def clear_cache(self) -> None:
+        """Drop all cached self-scores and reset the hit counter.
+
+        Useful between unrelated prompts on a long-lived controller, or in
+        tests that want isolation. Does not touch token/tiebreak metrics.
+        """
+        self._score_cache.clear()
+        self._score_cache_hits = 0
+
     def _generate(self, prompt: str, **kwargs) -> str:
         """engine.generate wrapper that accumulates token usage.
 
@@ -251,6 +260,15 @@ class DilationController:
                 elapsed = time.time() - start
                 if elapsed >= time_budget:
                     break
+                # Lookahead: if remaining budget < avg observed cycle time,
+                # a new cycle would overrun the budget. Stop now and keep best.
+                if history:
+                    avg_cycle_s = sum(c.elapsed_s for c in history) / len(history)
+                    remaining = time_budget - elapsed
+                    if avg_cycle_s > 0 and remaining < avg_cycle_s:
+                        logger.info("Time-budget lookahead: remaining %.2fs < avg cycle %.2fs — stopping",
+                                    remaining, avg_cycle_s)
+                        break
             else:
                 if cycle > num_cycles:
                     break
