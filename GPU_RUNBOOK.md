@@ -2,7 +2,7 @@
 
 Target host: rented GPU, workspace `/workspace/TD.org`. Package: `timedilate` (lives in `Time-dialation/` subdir of repo).
 
-All commands below are copy-paste ready for the GPU host shell.
+All commands below are copy-paste ready for the GPU host shell. CLI entry points: `timedilate` and short alias `td` (interchangeable — this runbook uses `timedilate`).
 
 ---
 
