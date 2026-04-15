@@ -272,8 +272,11 @@ class DilationController:
                         on_cycle(cycle, num_cycles or cycle, best_score, time.time() - start)
                     continue
                 fresh_improved = fresh_score > prior_best
+                # Fresh records share the cycle index of the preceding refine record
+                # by design — action="fresh" disambiguates. Consumers grouping by
+                # cycle should expect up to one refine + one fresh per index.
                 history.append(CycleRecord(
-                    cycle=cycle + 1, action="fresh", improved=fresh_improved,
+                    cycle=cycle, action="fresh", improved=fresh_improved,
                     score_before=prior_best, score_after=fresh_score,
                 ))
                 if fresh_improved:
