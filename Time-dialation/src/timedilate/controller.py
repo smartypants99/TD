@@ -57,7 +57,14 @@ class DilationResult:
             return 0.0
         return sum(1 for c in self.cycle_history if c.improved) / len(self.cycle_history)
 
-    def to_report(self, config: TimeDilateConfig | None = None) -> dict:
+    @property
+    def avg_cycle_seconds(self) -> float:
+        if not self.cycle_history:
+            return 0.0
+        return sum(c.elapsed_s for c in self.cycle_history) / len(self.cycle_history)
+
+    def to_report(self, config: TimeDilateConfig | None = None,
+                  score_cache_hits: int = 0) -> dict:
         from timedilate import __version__
         report = {
             "version": __version__,
@@ -66,13 +73,28 @@ class DilationResult:
             "cycles_completed": self.cycles_completed,
             "total_cycles": self.total_cycles,
             "elapsed_seconds": round(self.elapsed_seconds, 3),
+            "avg_cycle_seconds": round(self.avg_cycle_seconds, 3),
             "score": self.score,
+            "final_score": self.score,
             "initial_score": self.initial_score,
             "score_gain": self.score_gain,
             "improvement_rate": round(self.improvement_rate, 3),
             "model_used": self.model_used,
             "convergence_resets": self.convergence_resets,
             "improvements": sum(1 for c in self.cycle_history if c.improved),
+            "score_cache_hits": score_cache_hits,
+            "cycle_history": [
+                {
+                    "cycle": c.cycle,
+                    "action": c.action,
+                    "improved": c.improved,
+                    "score_before": c.score_before,
+                    "score_after": c.score_after,
+                    "elapsed_s": c.elapsed_s,
+                    "branches_tried": c.branches_tried,
+                }
+                for c in self.cycle_history
+            ],
         }
         if config:
             report["config"] = {

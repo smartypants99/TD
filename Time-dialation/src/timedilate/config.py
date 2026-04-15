@@ -24,6 +24,10 @@ class TimeDilateConfig:
     gpu_memory_gb: float = 48.0
     gpu_memory_utilization: float = 0.60  # fraction of GPU memory vLLM may reserve
     max_model_len: int | None = None  # cap context length to reduce KV cache memory
+    dtype: str = "auto"  # "auto" | "float16" | "bfloat16" | "float32"
+    enforce_eager: bool = False  # skip CUDA graph capture — saves VRAM on small GPUs
+    swap_space_gb: float = 4.0  # CPU swap space for KV cache overflow (GiB)
+    seed: int | None = None  # RNG seed for deterministic sampling; None = nondeterministic
 
     # Generation
     max_tokens: int = 4096
@@ -58,6 +62,14 @@ class TimeDilateConfig:
             raise ConfigError(
                 f"gpu_memory_utilization must be in 0.1-0.99, got {self.gpu_memory_utilization}"
             )
+        if self.dtype not in ("auto", "float16", "bfloat16", "float32", "half", "bf16"):
+            raise ConfigError(
+                f"dtype must be one of auto/float16/bfloat16/float32, got {self.dtype}"
+            )
+        if self.swap_space_gb < 0:
+            raise ConfigError(f"swap_space_gb must be >= 0, got {self.swap_space_gb}")
+        if self.max_model_len is not None and self.max_model_len < 1:
+            raise ConfigError(f"max_model_len must be >= 1 or None, got {self.max_model_len}")
         if self.branch_factor < 1:
             raise ConfigError(f"branch_factor must be >= 1, got {self.branch_factor}")
         if self.convergence_patience < 1:
