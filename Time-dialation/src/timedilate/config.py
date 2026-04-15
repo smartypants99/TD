@@ -4,7 +4,10 @@ Time dilation = giving the AI more subjective thinking time.
 Factor 1 = single pass. Factor 1000 = 1000x more reasoning cycles.
 Infinite scaling, no quality loss — more thinking only adds quality.
 """
+import logging
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 
 class ConfigError(ValueError):
@@ -79,6 +82,14 @@ class TimeDilateConfig:
         if self.branch_temperature_spread < 0:
             raise ConfigError(
                 f"branch_temperature_spread must be >= 0, got {self.branch_temperature_spread}"
+            )
+        if (self.seed is not None and self.branch_factor > 1
+                and self.branch_temperature_spread == 0.0):
+            logger.warning(
+                "seed=%s with branch_factor=%d and branch_temperature_spread=0.0 "
+                "will collapse branches to identical outputs — set "
+                "branch_temperature_spread>0 to preserve diversity.",
+                self.seed, self.branch_factor,
             )
 
     @property
