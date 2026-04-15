@@ -42,7 +42,10 @@ class DilationEngine:
         self._initialized = False
         self._effective_gpu_util: float | None = None
         self._total_output_tokens = 0
+        self._total_input_tokens = 0
         self._last_token_counts: list[int] = []
+        self._last_input_token_counts: list[int] = []
+        self._last_usage: dict = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
 
     def _build_llm_kwargs(self, gpu_util: float) -> dict:
         kwargs = dict(
@@ -155,6 +158,7 @@ class DilationEngine:
 
                 texts = [o.outputs[0].text for o in outputs]
                 token_counts: list[int] = []
+                input_counts: list[int] = []
                 for o in outputs:
                     out0 = o.outputs[0]
                     tids = getattr(out0, "token_ids", None)
@@ -162,8 +166,21 @@ class DilationEngine:
                         token_counts.append(len(tids) if tids is not None else 0)
                     except TypeError:
                         token_counts.append(0)
+                    pids = getattr(o, "prompt_token_ids", None)
+                    try:
+                        input_counts.append(len(pids) if pids is not None else 0)
+                    except TypeError:
+                        input_counts.append(0)
                 self._last_token_counts = token_counts
-                self._total_output_tokens += sum(token_counts)
+                self._last_input_token_counts = input_counts
+                in_sum, out_sum = sum(input_counts), sum(token_counts)
+                self._total_output_tokens += out_sum
+                self._total_input_tokens += in_sum
+                self._last_usage = {
+                    "input_tokens": in_sum,
+                    "output_tokens": out_sum,
+                    "total_tokens": in_sum + out_sum,
+                }
 
                 self._total_calls += len(texts)
                 self._total_latency += elapsed
@@ -213,6 +230,36 @@ class DilationEngine:
         return list(self._last_token_counts)
 
     @property
+    def last_input_token_counts(self) -> list[int]:
+        """Input (prompt) token counts from the most recent generate() call (per prompt)."""
+        return list(self._last_input_token_counts)
+
+    @property
+    def last_usage(self) -> dict:
+        """Token usage from the most recent generate() call.
+
+        Keys: input_tokens, output_tokens, total_tokens. All ints. Safe after
+        empty/failed calls (zeros). Populated from vLLM prompt_token_ids and
+        outputs[0].token_ids — no approximation.
+        """
+        return dict(self._last_usage)
+
+    def generate_with_usage(
+        self,
+        prompt: "str | Sequence[str]",
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        retries: int = 2,
+        stop: Sequence[str] | None = None,
+    ) -> "tuple[str | list[str], dict]":
+        """Like generate(), but returns (text_or_list, usage_dict)."""
+        text = self.generate(
+            prompt, max_tokens=max_tokens, temperature=temperature,
+            retries=retries, stop=stop,
+        )
+        return text, self.last_usage
+
+    @property
     def stats(self) -> dict:
         return {
             "total_calls": self._total_calls,
@@ -221,4 +268,5 @@ class DilationEngine:
             "oom_retries": self._oom_retries,
             "effective_gpu_util": self._effective_gpu_util,
             "total_output_tokens": self._total_output_tokens,
+            "total_input_tokens": self._total_input_tokens,
         }

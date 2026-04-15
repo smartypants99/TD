@@ -19,7 +19,7 @@ class StructuredFormatter(logging.Formatter):
 
 def setup_logging(verbose: bool = False, structured: bool = False) -> None:
     """Configure logging for the timedilate package."""
-    level = logging.DEBUG if verbose else logging.WARNING
+    level = logging.DEBUG if verbose else logging.INFO
     handler = logging.StreamHandler(sys.stderr)
     if structured:
         handler.setFormatter(StructuredFormatter())
