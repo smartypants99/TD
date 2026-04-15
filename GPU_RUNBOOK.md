@@ -82,13 +82,16 @@ kill -9 <PID>                    # only kill PIDs you own
 
 ## 5. VRAM decision tree
 
-Read the free memory from section 4, then pick a row. (Flag names pending final confirmation from cli-ux — placeholders below assume standard names.)
+Read the free memory from section 4, then pick a row.
 
-| Free VRAM      | Recommended flags                                                     |
-|----------------|------------------------------------------------------------------------|
-| > 40 GiB       | (defaults — no extra flags)                                            |
-| 25–40 GiB      | `--gpu-memory-utilization 0.45`                                        |
-| < 25 GiB       | `--gpu-memory-utilization 0.30 --max-model-len 4096 --enforce-eager`   |
+| Free VRAM      | Recommended flags                                             |
+|----------------|----------------------------------------------------------------|
+| > 40 GiB       | (defaults — no extra flags)                                    |
+| 25–40 GiB      | `--gpu-mem-util 0.45`                                          |
+| < 25 GiB       | `--gpu-mem-util 0.30 --max-model-len 4096 --enforce-eager`     |
+
+Other useful tuning flags (exposed by `timedilate run`):
+`--dtype`, `--swap-space` (GiB), `--seed`, `--branch-factor`, `--patience`, `--early-stop`, `--temperature`, `--stream-progress`, `--no-critique`, `--no-cot`.
 
 Engine already has an internal OOM fallback chain (`engine.py` retries lower utilization on CUDA OOM), but starting at the right value avoids wasted init time.
 
@@ -127,7 +130,7 @@ For a constrained GPU, append section 5 flags, e.g.:
 
 ```bash
 timedilate run "..." --factor 1000000 --time-budget 30 \
-    --gpu-memory-utilization 0.30 --max-model-len 4096 --enforce-eager \
+    --gpu-mem-util 0.30 --max-model-len 4096 --enforce-eager \
     --report --verbose
 ```
 
@@ -136,7 +139,7 @@ timedilate run "..." --factor 1000000 --time-budget 30 \
 ## 8. Troubleshooting
 
 ### CUDA OOM at model init
-- Lower `--gpu-memory-utilization` one step (0.60 → 0.45 → 0.30).
+- Lower `--gpu-mem-util` one step (0.60 → 0.45 → 0.30).
 - Add `--max-model-len 4096` (cuts KV cache).
 - Add `--enforce-eager` (skips CUDA graph capture — saves ~1–2 GiB).
 - Confirm no other process holds VRAM: `nvidia-smi`.
@@ -157,7 +160,7 @@ timedilate run "..." --factor 1000000 --time-budget 30 \
 
 ### Cache-miss tokenization slow-down
 - First cycle re-tokenizes the full system prompt. Subsequent cycles reuse the prefix — expect 5–10x speedup after cycle 1.
-- If every cycle is slow, the KV cache is being evicted: lower `--max-model-len` (less likely) or raise `--gpu-memory-utilization` (more KV cache room).
+- If every cycle is slow, the KV cache is being evicted: lower `--max-model-len` (less likely) or raise `--gpu-mem-util` (more KV cache room). Bumping `--swap-space` (default 4 GiB) gives KV more room on host RAM.
 
 ---
 
