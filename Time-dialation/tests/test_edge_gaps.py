@@ -164,3 +164,65 @@ def test_branch_factor_1_ignores_temperature_spread_setting():
     # Should complete one cycle successfully without crashing on spread math
     assert result.cycles_completed == 1
     assert result.score == 75
+
+
+# --- CLI report JSON shape (new fields from 5c61b33) ---
+
+def test_cli_report_json_contains_new_fields(tmp_path):
+    """--report output must include avg_cycle_seconds, score_cache_hits,
+    cycle_history, final_score so downstream tooling can rely on them."""
+    import json
+    from pathlib import Path
+    from click.testing import CliRunner
+    from timedilate.cli import main
+
+    vllm = sys.modules["vllm"]
+    vllm.reset_mock()
+    out = MagicMock()
+    out.outputs = [MagicMock(text="generated")]
+    vllm.LLM.return_value.generate.return_value = [out]
+
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        result = runner.invoke(
+            main, ["run", "hi", "--factor", "1", "--report", "--quiet"]
+        )
+        assert result.exit_code == 0, result.output
+        reports = list(Path(".").glob("timedilate_report_*.json"))
+        assert len(reports) == 1
+        data = json.loads(reports[0].read_text())
+        for key in ("avg_cycle_seconds", "score_cache_hits",
+                    "cycle_history", "final_score"):
+            assert key in data, f"missing {key} in report JSON"
+        assert isinstance(data["cycle_history"], list)
+        assert isinstance(data["avg_cycle_seconds"], (int, float))
+        assert isinstance(data["score_cache_hits"], int)
+        assert data["final_score"] == data["score"]
+
+
+# --- Engine: last_token_counts across partial-retry and empty-batch ---
+
+def test_last_token_counts_preserved_after_partial_retry(vllm_mock, make_vllm_output):
+    """Batched retry that re-issues only empty slots must still produce
+    per-slot token counts aligned to the original prompt order."""
+    first = [
+        make_vllm_output("ok1", token_ids=[1, 2]),
+        make_vllm_output("", token_ids=[]),
+        make_vllm_output("ok3", token_ids=[7, 8, 9]),
+    ]
+    second = [make_vllm_output("recovered", token_ids=[4, 5, 6, 7])]
+    vllm_mock.LLM.return_value.generate.side_effect = [first, second]
+    engine = DilationEngine(TimeDilateConfig())
+    results = engine.generate(["p1", "p2", "p3"])
+    assert results == ["ok1", "recovered", "ok3"]
+    assert engine.last_token_counts == [2, 4, 3]
+
+
+def test_last_token_counts_after_empty_batch(vllm_mock):
+    """generate([]) short-circuits and must not crash later callers
+    reading last_token_counts — should be a list (possibly empty or stale)."""
+    engine = DilationEngine(TimeDilateConfig())
+    result = engine.generate([])
+    assert result == []
+    counts = engine.last_token_counts
+    assert isinstance(counts, list)

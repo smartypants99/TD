@@ -164,6 +164,21 @@ class DilationController:
         self._total_output_tokens = 0
         self._tiebreaks_run = 0
         self._early_rejections = 0
+        self._patience = config.convergence_patience
+
+    @property
+    def effective_patience(self) -> int:
+        """Current adaptive convergence patience — starts at the configured
+        value, shrinks on sustained improvement, grows when stuck but noisy."""
+        return self._patience
+
+    def clear_score_cache(self) -> None:
+        """Alias for clear_cache() — matches spec-scaffold naming."""
+        self.clear_cache()
+
+    def _pairwise_compare(self, prompt: str, tied):
+        """Alias for _pairwise_break() — matches spec-scaffold naming."""
+        return self._pairwise_break(prompt, tied)
 
     def clear_cache(self) -> None:
         """Drop all cached self-scores and reset the hit counter.
@@ -369,6 +384,7 @@ class DilationController:
             adaptive_patience = self._adapt_patience(
                 history, score_stdev, base=self.config.convergence_patience
             )
+            self._patience = adaptive_patience
 
             plateau_window.append(best_score)
             if len(plateau_window) > 10:

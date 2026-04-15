@@ -86,7 +86,6 @@ def test_batched_generate_returns_list():
 
 # --- Controller: score cache clear ---
 
-@pytest.mark.xfail(reason="clear_score_cache() method not yet implemented")
 def test_score_cache_clear_method_exists():
     controller = DilationController(TimeDilateConfig(), MagicMock())
     assert hasattr(controller, "clear_score_cache")
@@ -94,7 +93,6 @@ def test_score_cache_clear_method_exists():
 
 # --- Controller: adaptive patience ---
 
-@pytest.mark.xfail(reason="adaptive patience adjustment not yet implemented")
 def test_controller_exposes_adaptive_patience():
     controller = DilationController(
         TimeDilateConfig(convergence_patience=5), MagicMock()
@@ -137,7 +135,6 @@ def test_time_budget_predictive_break():
 
 # --- Controller: pairwise tiebreak judge ---
 
-@pytest.mark.xfail(reason="pairwise tiebreak judge not yet implemented")
 def test_pairwise_tiebreak_method_exists():
     controller = DilationController(TimeDilateConfig(branch_factor=2), MagicMock())
     assert hasattr(controller, "_pairwise_compare") or hasattr(controller, "pairwise_tiebreak")
