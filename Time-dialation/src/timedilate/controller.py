@@ -22,6 +22,8 @@ from timedilate.config import TimeDilateConfig
 from timedilate.engine import DilationEngine
 
 _SCORE_CACHE_MAX = 10_000
+_MAX_CONSECUTIVE_BRANCH_FAILURES = 3
+_CRITIQUE_LOG_EVERY = 10
 
 logger = logging.getLogger(__name__)
 
@@ -167,6 +169,8 @@ class DilationController:
         no_improve_count = 0
         convergence_resets = 0
         cycle = 0
+        consecutive_branch_failures = 0
+        critique_failures = 0
 
         if use_time_budget:
             logger.info("Starting dilation: %.1fs budget x %.0fx factor = %.0fs subjective time, initial score: %d",
@@ -199,7 +203,12 @@ class DilationController:
                 try:
                     critique = self._critique(prompt, output, score)
                 except Exception as e:
-                    logger.warning("Critique failed on cycle %d: %s — using generic prompt", cycle, e)
+                    critique_failures += 1
+                    if critique_failures == 1 or critique_failures % _CRITIQUE_LOG_EVERY == 0:
+                        logger.warning(
+                            "Critique failed on cycle %d (total: %d): %s — using generic prompt",
+                            cycle, critique_failures, e,
+                        )
                     critique = "Improve the response."
             else:
                 critique = "Improve the response."
@@ -226,11 +235,23 @@ class DilationController:
                 except Exception as e:
                     logger.warning("Branch %d (t=%.2f) failed: %s", b, t, e)
             if not candidates:
-                logger.warning("All branches failed on cycle %d, skipping", cycle)
-                no_improve_count += 1
+                consecutive_branch_failures += 1
+                logger.warning(
+                    "All branches failed on cycle %d (%d consecutive), skipping",
+                    cycle, consecutive_branch_failures,
+                )
+                if consecutive_branch_failures >= _MAX_CONSECUTIVE_BRANCH_FAILURES:
+                    logger.error(
+                        "Aborting run: %d consecutive all-branches-failed cycles",
+                        consecutive_branch_failures,
+                    )
+                    break
+                # Engine-side transient failures should NOT count toward the
+                # plateau signal; no_improve_count is left untouched.
                 if on_cycle:
                     on_cycle(cycle, num_cycles or cycle, best_score, time.time() - start)
                 continue
+            consecutive_branch_failures = 0
             candidates.sort(key=lambda x: x[0], reverse=True)
             new_score, new_output, winning_t = candidates[0]
             if branches > 1:
@@ -266,6 +287,12 @@ class DilationController:
                     fresh_score = self._score(prompt, fresh)
                 except Exception as e:
                     logger.warning("Fresh attempt failed on cycle %d: %s — skipping", cycle, e)
+                    # Append a failed fresh record so convergence_resets stays
+                    # in sync with action=='fresh' history entries.
+                    history.append(CycleRecord(
+                        cycle=cycle, action="fresh", improved=False,
+                        score_before=prior_best, score_after=prior_best,
+                    ))
                     no_improve_count = 0
                     convergence_resets += 1
                     if on_cycle:
