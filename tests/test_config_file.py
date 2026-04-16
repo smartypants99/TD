@@ -78,20 +78,20 @@ def test_unknown_keys_warned_and_ignored(tmp_path, caplog):
     cfg = {"dilation_factor": 2.0, "bogus_key": 999}
     f = tmp_path / "config.json"
     f.write_text(json.dumps(cfg))
-    logger = logging.getLogger("timedilate.config")
-    orig_propagate = logger.propagate
-    orig_level = logger.level
-    handler = logging.StreamHandler()
-    logger.addHandler(handler)
-    logger.propagate = True
-    logger.setLevel(logging.WARNING)
+    # caplog captures via propagation to root. The parent "timedilate" logger
+    # may have propagate=False and stale handlers from prior setup_logging()
+    # calls, so we must temporarily fix both the parent and the child.
+    parent = logging.getLogger("timedilate")
+    orig_parent_propagate = parent.propagate
+    orig_parent_handlers = parent.handlers[:]
+    parent.propagate = True
+    parent.handlers.clear()
     try:
         with caplog.at_level(logging.WARNING, logger="timedilate.config"):
             config = TimeDilateConfig.from_file(str(f))
     finally:
-        logger.removeHandler(handler)
-        logger.propagate = orig_propagate
-        logger.setLevel(orig_level)
+        parent.propagate = orig_parent_propagate
+        parent.handlers = orig_parent_handlers
     assert config.dilation_factor == 2.0
     assert "bogus_key" in caplog.text
 
