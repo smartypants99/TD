@@ -24,13 +24,13 @@ def _mock_engine(responses):
 
 # --- Score parser: negative numbers must not be accepted ---
 
-def test_score_parser_rejects_negative_number():
-    """'-50' should NOT parse as a valid score (isdigit() rejects the '-')."""
+def test_score_parser_clamps_negative_number():
+    """'-50' is parsed as -50 then clamped to 0 (minimum valid score)."""
     engine = MagicMock()
     engine.generate = MagicMock(return_value="-50")
     controller = DilationController(TimeDilateConfig(), engine)
     s = controller._score("prompt", "output")
-    assert s == 50  # parser gave up, defaulted to 50
+    assert s == 0  # parsed as -50, clamped to 0
 
 
 def test_score_parser_zero_is_valid():

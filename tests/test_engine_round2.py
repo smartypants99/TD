@@ -164,7 +164,7 @@ def test_all_list_is_exhaustive():
     expected = {
         "__version__", "TimeDilateConfig", "ConfigError",
         "DilationController", "DilationResult", "CycleRecord",
-        "DilationEngine", "InferenceError",
+        "DilationEvent", "DilationEngine", "InferenceError",
     }
     assert set(timedilate.__all__) == expected
 

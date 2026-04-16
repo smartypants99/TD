@@ -174,6 +174,9 @@ class DilationResult:
                 for c in self.cycle_history
             ],
         }
+        if self.last_scoring_result and self.last_scoring_result.dimensions:
+            report["scoring_dimensions"] = self.last_scoring_result.dimensions
+            report["scoring_weighted_total"] = self.last_scoring_result.weighted_total
         if config:
             report["config"] = {
                 "dilation_factor": config.dilation_factor,
