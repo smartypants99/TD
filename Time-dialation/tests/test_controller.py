@@ -11,9 +11,14 @@ from timedilate.controller import DilationController, DilationResult
 
 
 def _mock_engine(responses):
-    """Create a mock engine that returns responses in sequence."""
+    """Create a mock engine that returns responses in sequence.
+
+    Configures last_usage as a real dict so the controller exercises the
+    real token-accounting path instead of falling back to approximation.
+    """
     engine = MagicMock()
     engine.generate = MagicMock(side_effect=list(responses))
+    engine.last_usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
     return engine
 
 
