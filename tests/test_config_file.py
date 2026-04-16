@@ -79,13 +79,19 @@ def test_unknown_keys_warned_and_ignored(tmp_path, caplog):
     f = tmp_path / "config.json"
     f.write_text(json.dumps(cfg))
     logger = logging.getLogger("timedilate.config")
-    orig = logger.propagate
+    orig_propagate = logger.propagate
+    orig_level = logger.level
+    handler = logging.StreamHandler()
+    logger.addHandler(handler)
     logger.propagate = True
+    logger.setLevel(logging.WARNING)
     try:
         with caplog.at_level(logging.WARNING, logger="timedilate.config"):
             config = TimeDilateConfig.from_file(str(f))
     finally:
-        logger.propagate = orig
+        logger.removeHandler(handler)
+        logger.propagate = orig_propagate
+        logger.setLevel(orig_level)
     assert config.dilation_factor == 2.0
     assert "bogus_key" in caplog.text
 
