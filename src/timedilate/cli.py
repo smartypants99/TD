@@ -60,6 +60,14 @@ def main(ctx):
 
 @main.command()
 @click.argument("prompt")
+# Config file
+@click.option("--config", "config_file", default=None, type=click.Path(exists=True),
+              help="Load base config from a JSON or YAML file. CLI flags override file values.")
+# Checkpoint/resume
+@click.option("--checkpoint-interval", default=None, type=int,
+              help="Save checkpoint every N cycles (0 = disabled).")
+@click.option("--resume", "resume_path", default=None, type=click.Path(exists=True),
+              help="Resume from a checkpoint JSON file.")
 # Core
 @click.option("--factor", default=1.0, type=float,
               help="Dilation factor — subjective time multiplier (e.g., 10, 1000, 1000000).")
@@ -103,7 +111,8 @@ def main(ctx):
 @click.option("--quiet", is_flag=True, help="Print only the final result.")
 @click.option("--verbose", is_flag=True, help="Detailed logging.")
 @click.option("--dry-run", is_flag=True, help="Show resolved config and exit.")
-def run(prompt, factor, model, time_budget, max_tokens,
+def run(prompt, config_file, checkpoint_interval, resume_path,
+        factor, model, time_budget, max_tokens,
         gpu_mem_util, max_model_len, dtype, enforce_eager, swap_space,
         temperature, seed,
         branch_factor, patience, early_stop, no_critique, no_cot,
@@ -119,6 +128,19 @@ def run(prompt, factor, model, time_budget, max_tokens,
     """
     setup_logging(verbose=verbose)
 
+    # Handle --resume: load checkpoint and continue
+    if resume_path:
+        controller = DilationController.resume(resume_path)
+        if not quiet:
+            console.print(f"[bold green]Resuming from checkpoint:[/] {resume_path}")
+        result = controller.run(prompt, on_cycle=lambda *a: None)
+        cache_hits = getattr(controller, "_score_cache_hits", 0)
+        if quiet:
+            click.echo(result.output)
+        else:
+            console.print(result.output)
+        return
+
     kwargs = dict(
         model=model,
         dilation_factor=factor,
@@ -130,7 +152,8 @@ def run(prompt, factor, model, time_budget, max_tokens,
     if max_model_len is not None:
         kwargs["max_model_len"] = max_model_len
     if dtype is not None:
-        kwargs["dtype"] = dtype
+        _dtype_aliases = {"half": "float16", "bf16": "bfloat16"}
+        kwargs["dtype"] = _dtype_aliases.get(dtype, dtype)
     if enforce_eager:
         kwargs["enforce_eager"] = True
     if swap_space is not None:
@@ -149,8 +172,13 @@ def run(prompt, factor, model, time_budget, max_tokens,
         kwargs["use_self_critique"] = False
     if no_cot:
         kwargs["use_chain_of_thought"] = False
+    if checkpoint_interval is not None:
+        kwargs["checkpoint_interval"] = checkpoint_interval
 
-    config = TimeDilateConfig(**kwargs)
+    if config_file:
+        config = TimeDilateConfig.from_file(config_file, **kwargs)
+    else:
+        config = TimeDilateConfig(**kwargs)
     try:
         config.validate()
     except ConfigError as e:
@@ -181,8 +209,39 @@ def run(prompt, factor, model, time_budget, max_tokens,
         else:
             console.print(f"  [dim]Cycle {progress} — score: {score} — {elapsed:.1f}s[/]")
 
+    def on_event(event):
+        if quiet:
+            return
+        t = event.event_type
+        d = event.data
+        if t == "branch_scored" and stream_progress:
+            console.print(
+                f"    [dim]branch {d.get('branch', '?')} "
+                f"score={d.get('score', '?')} t={d.get('temperature', '?')}[/]"
+            )
+        elif t == "tiebreak":
+            console.print(
+                f"    [yellow]tiebreak: {d.get('num_tied', '?')} tied, "
+                f"winner={d.get('winner', '?')}[/]"
+            )
+        elif t == "fresh_attempt":
+            label = "[green]improved[/]" if d.get("improved") else "[red]no improvement[/]"
+            console.print(
+                f"    [cyan]fresh attempt[/] score={d.get('score', '?')} "
+                f"(was {d.get('prior_best', '?')}) {label}"
+            )
+        elif t == "convergence_reset":
+            console.print(
+                f"    [yellow]convergence reset[/] #{d.get('resets', '?')}"
+            )
+        elif t == "early_stop":
+            console.print(
+                f"  [green]early stop[/] score {d.get('score', '?')} "
+                f">= {d.get('threshold', '?')}"
+            )
+
     controller = DilationController(config)
-    result = controller.run(prompt, on_cycle=on_cycle)
+    result = controller.run(prompt, on_cycle=on_cycle, on_event=on_event)
     cache_hits = getattr(controller, "_score_cache_hits", 0)
 
     if quiet:
