@@ -99,6 +99,7 @@ class DilationResult:
     total_output_tokens: int = 0
     tiebreaks_run: int = 0
     early_rejections: int = 0
+    last_scoring_result: ScoringResult | None = None
 
     @property
     def tokens_per_cycle(self) -> float:
@@ -702,10 +703,68 @@ class DilationController:
         h.update(output.encode("utf-8", errors="ignore"))
         return h.hexdigest()
 
-    def _score(self, prompt: str, output: str) -> int:
-        """Have the AI score its own output 0-100.
+    def _get_scoring_dimensions(self) -> dict[str, float]:
+        """Return the active scoring dimensions with normalized weights."""
+        dims = self.config.scoring_dimensions or DEFAULT_SCORING_DIMENSIONS
+        total = sum(dims.values())
+        if total == 0:
+            n = len(dims)
+            return {k: 1.0 / n for k in dims} if n else dict(DEFAULT_SCORING_DIMENSIONS)
+        return {k: v / total for k, v in dims.items()}
 
-        Rubric is strict to resist grade inflation. Results are cached
+    @staticmethod
+    def _parse_dimensional_scores(raw: str, dimensions: dict[str, float]) -> dict[str, int] | None:
+        """Parse per-dimension scores from model output.
+
+        Expected format: one line per dimension like "accuracy: 72".
+        Returns None if fewer than half the dimensions could be parsed.
+        """
+        import re
+        scores: dict[str, int] = {}
+        for dim in dimensions:
+            pattern = re.compile(
+                rf"\b{re.escape(dim)}\s*[:=]\s*(\d+)",
+                re.IGNORECASE,
+            )
+            m = pattern.search(raw)
+            if m:
+                scores[dim] = min(100, max(0, int(m.group(1))))
+        if len(scores) < len(dimensions) / 2:
+            return None
+        for dim in dimensions:
+            if dim not in scores:
+                scores[dim] = 50
+        return scores
+
+    @staticmethod
+    def _compute_weighted_total(dim_scores: dict[str, int], weights: dict[str, float]) -> int:
+        """Compute weighted total from per-dimension scores."""
+        total = sum(dim_scores.get(d, 50) * w for d, w in weights.items())
+        return min(100, max(0, int(round(total))))
+
+    def _score_from_result(self, result: str, dims: dict[str, float], cache_key: str) -> int:
+        """Parse a single scoring result, store ScoringResult, cache and return int."""
+        dim_scores = self._parse_dimensional_scores(result, dims)
+        if dim_scores is not None:
+            weighted = self._compute_weighted_total(dim_scores, dims)
+            self._last_scoring_result = ScoringResult(
+                dimensions=dim_scores, weighted_total=weighted, raw_text=result,
+            )
+            self._cache_put(cache_key, weighted)
+            return weighted
+        s = self._parse_score(result)
+        self._last_scoring_result = ScoringResult(
+            dimensions={}, weighted_total=s, raw_text=result,
+        )
+        self._cache_put(cache_key, s)
+        return s
+
+    def _score(self, prompt: str, output: str) -> int:
+        """Have the AI score its own output 0-100 across multiple dimensions.
+
+        Asks for per-dimension scores, computes a weighted total, and stores
+        the full ScoringResult on self._last_scoring_result. Returns the
+        weighted total int for backward compatibility. Results are cached
         (LRU) by (prompt, output) hash.
         """
         key = self._cache_key(prompt, output)
@@ -713,39 +772,54 @@ class DilationController:
             self._score_cache_hits += 1
             self._score_cache.move_to_end(key)
             return self._score_cache[key]
+
+        dims = self._get_scoring_dimensions()
+        dim_list = "\n".join(
+            f"  {name} (weight {w:.0%}): 0-100"
+            for name, w in dims.items()
+        )
+
         # Random per-call fence — content inside TASK/RESPONSE cannot guess it,
         # so it cannot forge a "matching" closer and break out of the block.
         import uuid
         fence = uuid.uuid4().hex
-        # Truncate long outputs to save tokens — keep first/last halves so the
-        # uuid fence delimiters remain intact (they wrap the truncated text).
+        # Truncate long outputs to save tokens.
         max_sc = self.config.max_score_input_chars
         trunc_output = self._truncate(output, max_sc, max_sc // 2, max_sc // 2)
         score_prompt = self._templates.effective_score.format_map(
-            {"fence": fence, "prompt": prompt, "output": trunc_output}
+            {"fence": fence, "prompt": prompt, "output": trunc_output,
+             "dim_list": dim_list}
         )
         # Let engine-level InferenceError propagate so callers (branch loop,
-        # fresh-attempt wrapper) can decide how to degrade. Parse failures
-        # only: default to 50 (not cached — we want to retry a real scoring
-        # call next time).
+        # fresh-attempt wrapper) can decide how to degrade.
         n = self.config.ensemble_scores
         if n <= 1:
-            result = self._generate(score_prompt, max_tokens=16, temperature=0.0)
-            s = self._parse_score(result)
-            self._cache_put(key, s)
-            return s
+            result = self._generate(score_prompt, max_tokens=120, temperature=0.0)
+            return self._score_from_result(result, dims, key)
 
         # Ensemble: N calls at spread temperatures [0.0 .. 0.3], take median.
         temps = [round(i * 0.3 / max(1, n - 1), 2) for i in range(n)]
         raw_scores: list[int] = []
+        last_result_text = ""
         for t in temps:
-            result = self._generate(score_prompt, max_tokens=16, temperature=t)
-            raw_scores.append(self._parse_score(result))
+            result = self._generate(score_prompt, max_tokens=120, temperature=t)
+            last_result_text = result
+            dim_scores = self._parse_dimensional_scores(result, dims)
+            if dim_scores is not None:
+                raw_scores.append(self._compute_weighted_total(dim_scores, dims))
+            else:
+                raw_scores.append(self._parse_score(result))
         raw_scores.sort()
         median = raw_scores[len(raw_scores) // 2]
         logger.info(
             "Ensemble score: median=%d from %d calls (raw=%s, temps=%s)",
             median, n, raw_scores, temps,
+        )
+        dim_scores = self._parse_dimensional_scores(last_result_text, dims)
+        self._last_scoring_result = ScoringResult(
+            dimensions=dim_scores or {},
+            weighted_total=median,
+            raw_text=last_result_text,
         )
         self._cache_put(key, median)
         return median

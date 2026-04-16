@@ -4,8 +4,10 @@ Time dilation = giving the AI more subjective thinking time.
 Factor 1 = single pass. Factor 1000 = 1000x more reasoning cycles.
 Infinite scaling, no quality loss — more thinking only adds quality.
 """
+import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +53,21 @@ class TimeDilateConfig:
     # Early stopping & exploration
     early_stop_score: int = 98  # stop if score >= this (saves tokens on perfect answers)
     branch_temperature_spread: float = 0.3  # +/- spread for branch diversification
+    ensemble_scores: int = 1  # how many scoring calls per evaluation (1-5); median wins
+    scoring_dimensions: dict[str, float] | None = None  # dimension->weight; None = equal-weight defaults
+
+    # Token efficiency
+    max_score_input_chars: int = 8000  # truncate long outputs in scoring prompt
+    max_history_items: int = 5  # cap history summary length for long runs
+    max_critique_chars: int = 16000  # truncate extremely long critiques
+    max_refine_output_chars: int = 16000  # truncate extremely long refine outputs
+
+    # Prompt templates — None means use built-in defaults
+    prompt_templates: "PromptTemplates | None" = None
+
+    # Checkpoint/resume
+    checkpoint_interval: int = 0  # 0 = disabled, N = save state every N cycles
+    checkpoint_dir: str = ".timedilate_checkpoints"
 
     def validate(self) -> None:
         if self.dilation_factor < 1.0:
@@ -79,6 +96,10 @@ class TimeDilateConfig:
             raise ConfigError(f"convergence_patience must be >= 1, got {self.convergence_patience}")
         if not (0 <= self.early_stop_score <= 100):
             raise ConfigError(f"early_stop_score must be in 0-100, got {self.early_stop_score}")
+        if not (1 <= self.ensemble_scores <= 5):
+            raise ConfigError(
+                f"ensemble_scores must be 1-5, got {self.ensemble_scores}"
+            )
         if self.branch_temperature_spread < 0:
             raise ConfigError(
                 f"branch_temperature_spread must be >= 0, got {self.branch_temperature_spread}"
@@ -129,3 +150,46 @@ class TimeDilateConfig:
             lines.append("  Chain-of-thought: enabled")
         lines.append(f"  Convergence patience: {self.convergence_patience}")
         return "\n".join(lines)
+
+    @classmethod
+    def from_file(cls, path: str, **overrides) -> "TimeDilateConfig":
+        """Load config from a JSON or YAML file.
+
+        File format is detected by extension (.yaml/.yml = YAML, else JSON).
+        Any ``overrides`` are applied on top of the file values, allowing
+        CLI flags to take precedence.
+        """
+        p = Path(path)
+        if not p.exists():
+            raise ConfigError(f"Config file not found: {path}")
+
+        raw = p.read_text(encoding="utf-8")
+
+        if p.suffix in (".yaml", ".yml"):
+            try:
+                import yaml
+            except ImportError:
+                raise ConfigError(
+                    "PyYAML is required to load YAML config files. "
+                    "Install it with: pip install pyyaml"
+                )
+            data = yaml.safe_load(raw)
+        else:
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError as e:
+                raise ConfigError(f"Invalid JSON in {path}: {e}")
+
+        if not isinstance(data, dict):
+            raise ConfigError(
+                f"Config file must contain a JSON/YAML object, got {type(data).__name__}"
+            )
+
+        valid_names = {f.name for f in fields(cls)}
+        unknown = set(data.keys()) - valid_names
+        if unknown:
+            logger.warning("Ignoring unknown config keys: %s", ", ".join(sorted(unknown)))
+            data = {k: v for k, v in data.items() if k in valid_names}
+
+        data.update({k: v for k, v in overrides.items() if v is not None})
+        return cls(**data)
