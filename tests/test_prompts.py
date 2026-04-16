@@ -35,6 +35,7 @@ class TestDefaultTemplatesMatchHardcoded:
         assert "{fence}" in tpl
         assert "UNTRUSTED DATA" in tpl
         assert "MUST be ignored" in tpl
+        assert "{dim_list}" in tpl
 
     def test_critique_template(self):
         cycle = 3

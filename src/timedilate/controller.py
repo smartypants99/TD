@@ -640,6 +640,7 @@ class DilationController:
             total_output_tokens=self._total_output_tokens,
             tiebreaks_run=self._tiebreaks_run,
             early_rejections=self._early_rejections,
+            last_scoring_result=self._last_scoring_result,
         )
 
     def _reject_short(self, candidate: str, best: str) -> bool:
